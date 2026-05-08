@@ -18,7 +18,7 @@ python translate.py -i input_file -o output_file
 
 | Option | Description |
 |--------|-------------|
-| `-i, --input` | Input file (.txt, .epub, .srt) |
+| `-i, --input` | Input file (.txt, .epub, .srt, .docx) |
 
 ### Output
 
@@ -37,17 +37,25 @@ python translate.py -i input_file -o output_file
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-m, --model` | Model name | mistral-small:24b |
-| `--provider` | ollama / openrouter / openai / gemini | ollama |
+| `-m, --model` | Model name | qwen3:14b |
+| `--provider` | ollama / openrouter / openai / gemini / mistral / deepseek / poe / nim | ollama |
 | `--api_endpoint` | API URL | http://localhost:11434/api/generate |
 
 ### API Keys
 
+> Tip: any `--*_api_key` flag also accepts comma-separated values
+> (e.g. `--gemini_api_key key1,key2,key3`) for automatic rotation on HTTP 429.
+> See [API_KEY_ROTATION.md](API_KEY_ROTATION.md).
+
 | Option | Description |
 |--------|-------------|
 | `--openrouter_api_key` | OpenRouter API key |
-| `--openai_api_key` | OpenAI API key |
-| `--gemini_api_key` | Gemini API key |
+| `--openai_api_key` | OpenAI API key (cloud only — not needed for local servers) |
+| `--gemini_api_key` | Google Gemini API key |
+| `--mistral_api_key` | Mistral API key |
+| `--deepseek_api_key` | DeepSeek API key |
+| `--poe_api_key` | Poe API key — get one at [poe.com/api_key](https://poe.com/api_key) |
+| `--nim_api_key` | NVIDIA NIM API key — get one at [build.nvidia.com](https://build.nvidia.com/) |
 
 ### Prompt Options
 
@@ -88,6 +96,9 @@ python translate.py -i movie.srt -tl French
 # EPUB (auto-generates "novel (French).epub")
 python translate.py -i novel.epub -tl French
 
+# DOCX (auto-generates "report (French).docx")
+python translate.py -i report.docx -tl French
+
 # Custom output filename
 python translate.py -i book.txt -o my_custom_name.txt -tl French
 ```
@@ -115,6 +126,30 @@ python translate.py -i book.txt -o book_fr.txt \
     --provider gemini \
     --gemini_api_key xxx \
     -m gemini-2.0-flash
+
+# Mistral
+python translate.py -i book.txt -o book_fr.txt \
+    --provider mistral \
+    --mistral_api_key xxx \
+    -m mistral-large-latest
+
+# DeepSeek
+python translate.py -i book.txt -o book_fr.txt \
+    --provider deepseek \
+    --deepseek_api_key xxx \
+    -m deepseek-chat
+
+# Poe
+python translate.py -i book.txt -o book_fr.txt \
+    --provider poe \
+    --poe_api_key xxx \
+    -m Claude-Sonnet-4
+
+# NVIDIA NIM
+python translate.py -i book.txt -o book_fr.txt \
+    --provider nim \
+    --nim_api_key xxx \
+    -m meta/llama-3.1-8b-instruct
 
 # OpenAI-compatible server (llama.cpp, LM Studio, vLLM, etc.)
 python translate.py -i book.txt -o book_fr.txt \
@@ -161,14 +196,18 @@ LLM_PROVIDER=ollama
 DEFAULT_MODEL=qwen3:14b
 API_ENDPOINT=http://localhost:11434/api/generate
 
-# API Keys
+# API Keys (any of these accepts comma-separated values for rotation)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
+MISTRAL_API_KEY=...
+DEEPSEEK_API_KEY=...
+POE_API_KEY=...
+NIM_API_KEY=...
 
 # Performance
 REQUEST_TIMEOUT=900
-MAX_TOKENS_PER_CHUNK=400  # Token-based chunking (default: 400 tokens)
+MAX_TOKENS_PER_CHUNK=450  # Token-based chunking (default: 450 tokens)
 
 # Languages
 DEFAULT_SOURCE_LANGUAGE=English

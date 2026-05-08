@@ -235,7 +235,7 @@ Set in `.env` file:
 ```bash
 # Ollama Configuration
 API_ENDPOINT=http://localhost:11434/api/generate
-DEFAULT_MODEL=mistral-small:24b
+DEFAULT_MODEL=qwen3:14b
 OLLAMA_NUM_CTX=2048
 REQUEST_TIMEOUT=900
 

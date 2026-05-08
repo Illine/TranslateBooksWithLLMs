@@ -29,7 +29,8 @@ Providers:
 <img src="src/web/static/img/providers/openai.png" alt="OpenAI" height="32">&nbsp;&nbsp;
 <img src="src/web/static/img/providers/mistral.png" alt="Mistral" height="32">&nbsp;&nbsp;
 <img src="src/web/static/img/providers/deepseek.png" alt="DeepSeek" height="32">&nbsp;&nbsp;
-<img src="src/web/static/img/providers/gemini.png" alt="Gemini" height="32">
+<img src="src/web/static/img/providers/gemini.png" alt="Gemini" height="32">&nbsp;&nbsp;
+<img src="src/web/static/img/providers/nvidia.png" alt="NVIDIA NIM" height="32">
 </p>
 
 - [**Ollama**](https://ollama.com/download) (local / cloud)
@@ -39,6 +40,7 @@ Providers:
 - [**Mistral**](https://console.mistral.ai/api-keys)
 - [**DeepSeek**](https://platform.deepseek.com/api_keys)
 - [**Gemini**](https://aistudio.google.com/apikey)
+- [**NVIDIA NIM**](https://build.nvidia.com/)
 
 > **[Translation Quality Benchmarks](https://github.com/hydropix/TranslateBooksWithLLMs/wiki)** — Find the best model for your target language.
 
@@ -91,6 +93,7 @@ The web interface opens at **http://localhost:5000**
 | **Mistral** | Cloud | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | **DeepSeek** | Cloud | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
 | **Gemini** | Cloud | [Google AI Studio](https://makersuite.google.com/app/apikey) |
+| **NVIDIA NIM** | Cloud | [build.nvidia.com](https://build.nvidia.com/) |
 
 > **OpenAI-Compatible servers:** Use `--provider openai` with your server's endpoint (e.g., llama.cpp: `http://localhost:8080/v1/chat/completions`, LM Studio: `http://localhost:1234/v1/chat/completions`)
 
@@ -116,6 +119,22 @@ python translate.py -i book.txt --provider openai \
 python translate.py -i book.txt --provider gemini \
     --gemini_api_key YOUR_KEY -m gemini-2.0-flash -tl French
 
+# With Mistral
+python translate.py -i book.txt --provider mistral \
+    --mistral_api_key YOUR_KEY -m mistral-large-latest -tl French
+
+# With DeepSeek
+python translate.py -i book.txt --provider deepseek \
+    --deepseek_api_key YOUR_KEY -m deepseek-chat -tl French
+
+# With Poe
+python translate.py -i book.txt --provider poe \
+    --poe_api_key YOUR_KEY -m Claude-Sonnet-4 -tl French
+
+# With NVIDIA NIM
+python translate.py -i book.txt --provider nim \
+    --nim_api_key YOUR_KEY -m meta/llama-3.1-8b-instruct -tl French
+
 # With local OpenAI-compatible server (llama.cpp, LM Studio, vLLM, etc.)
 python translate.py -i book.txt --provider openai \
     --api_endpoint http://localhost:8080/v1/chat/completions -m your-model -tl French
@@ -129,8 +148,8 @@ python translate.py -i book.txt --provider openai \
 | `-o, --output` | Output file | Auto: `{name} ({lang}).{ext}` |
 | `-sl, --source_lang` | Source language | English |
 | `-tl, --target_lang` | Target language | Chinese |
-| `-m, --model` | Model name | mistral-small:24b |
-| `--provider` | ollama/openrouter/openai/gemini | ollama |
+| `-m, --model` | Model name | qwen3:14b |
+| `--provider` | ollama/openrouter/openai/gemini/mistral/deepseek/poe/nim | ollama |
 | `--text-cleanup` | OCR/typographic cleanup | disabled |
 | `--refine` | Second pass for literary polish | disabled |
 | `--tts` | Generate audio (Edge-TTS) | disabled |
@@ -149,16 +168,20 @@ LLM_PROVIDER=ollama
 
 # Ollama
 API_ENDPOINT=http://localhost:11434/api/generate
-DEFAULT_MODEL=mistral-small:24b
+DEFAULT_MODEL=qwen3:14b
 
 # API Keys (if using cloud providers)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
+MISTRAL_API_KEY=...
+DEEPSEEK_API_KEY=...
+POE_API_KEY=...
+NIM_API_KEY=...
 
 # Performance
 REQUEST_TIMEOUT=900
-MAX_TOKENS_PER_CHUNK=400  # Token-based chunking (default: 400 tokens)
+MAX_TOKENS_PER_CHUNK=450  # Token-based chunking (default: 450 tokens)
 ```
 
 > **Multiple API keys?** Any `*_API_KEY` variable accepts a comma-separated list (e.g. `GEMINI_API_KEY=key1,key2,key3`). The system rotates between keys automatically when one hits a rate limit — useful to chain free-tier accounts. See [docs/API_KEY_ROTATION.md](docs/API_KEY_ROTATION.md).

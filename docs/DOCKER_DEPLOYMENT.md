@@ -48,7 +48,7 @@ Edit your `.env` file:
 ```env
 LLM_PROVIDER=ollama
 API_ENDPOINT=http://host.docker.internal:11434/api/generate
-DEFAULT_MODEL=mistral-small:24b
+DEFAULT_MODEL=qwen3:14b
 ```
 
 **Linux:**
@@ -58,7 +58,7 @@ Option 1: Use host IP address
 ```env
 LLM_PROVIDER=ollama
 API_ENDPOINT=http://192.168.1.100:11434/api/generate  # Replace with your host IP
-DEFAULT_MODEL=mistral-small:24b
+DEFAULT_MODEL=qwen3:14b
 ```
 
 Option 2: Uncomment `extra_hosts` in [docker-compose.yml](docker-compose.yml:64-66):
@@ -259,7 +259,7 @@ docker-compose exec translatebook python translate.py \
   -i /app/translated_files/input.epub \
   -o /app/translated_files/output_fr.epub \
   -sl English -tl French \
-  -m mistral-small:24b
+  -m qwen3:14b
 ```
 
 ### SRT Subtitle Translation via CLI
@@ -421,7 +421,7 @@ curl http://localhost:11434/api/tags
 
 # Pull a model if needed
 docker-compose exec translatebook curl -X POST http://host.docker.internal:11434/api/pull \
-  -d '{"name": "mistral-small:24b"}'
+  -d '{"name": "qwen3:14b"}'
 ```
 
 **Verify configuration:**

@@ -157,6 +157,113 @@ python translate.py -i book.txt -o book_fr.txt \
 
 ---
 
+## Mistral (Cloud)
+
+European cloud provider with strong multilingual quality.
+
+### Models
+
+- `mistral-large-latest` — flagship
+- `mistral-small-latest` — cheaper, fast
+- `open-mistral-nemo`
+- `codestral-latest`
+
+### Setup
+
+1. Get API key at [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys)
+2. In TBL: Select "Mistral", enter your key
+
+### CLI Example
+
+```bash
+python translate.py -i book.txt -o book_fr.txt \
+    --provider mistral \
+    --mistral_api_key your-key \
+    -m mistral-large-latest
+```
+
+Pricing: [mistral.ai/technology](https://mistral.ai/technology)
+
+---
+
+## DeepSeek (Cloud)
+
+Chinese LLM provider with 64K context and OpenAI-compatible API. Supports thinking models.
+
+### Models
+
+- `deepseek-chat` — general chat (V3)
+- `deepseek-reasoner` — reasoning model with `<think>` blocks
+
+### Setup
+
+1. Get API key at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
+2. In TBL: Select "DeepSeek", enter your key
+
+### CLI Example
+
+```bash
+python translate.py -i book.txt -o book_fr.txt \
+    --provider deepseek \
+    --deepseek_api_key your-key \
+    -m deepseek-chat
+```
+
+Pricing: [api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing)
+
+---
+
+## Poe (Cloud)
+
+Single key, many models — Claude, GPT, Gemini, Llama, Mistral, DeepSeek and more from one Poe account.
+
+### Setup
+
+1. Get API key at [poe.com/api_key](https://poe.com/api_key)
+2. In TBL: Select "Poe", enter your key
+3. Pick a model name from [poe.com](https://poe.com/) (case-sensitive, e.g. `Claude-Sonnet-4`)
+
+### CLI Example
+
+```bash
+python translate.py -i book.txt -o book_fr.txt \
+    --provider poe \
+    --poe_api_key your-key \
+    -m Claude-Sonnet-4
+```
+
+> Poe usage is metered in points — each model has its own cost. Check the model card on poe.com for the rate.
+
+---
+
+## NVIDIA NIM (Cloud)
+
+Hosted models via NVIDIA's inference platform — OpenAI-compatible API, generous free tier.
+
+### Setup
+
+1. Get API key at [build.nvidia.com](https://build.nvidia.com/)
+2. In TBL: Select "NVIDIA NIM", enter your key
+
+### CLI Example
+
+```bash
+python translate.py -i book.txt -o book_fr.txt \
+    --provider nim \
+    --nim_api_key your-key \
+    -m meta/llama-3.1-8b-instruct
+```
+
+Browse models: [build.nvidia.com](https://build.nvidia.com/)
+
+---
+
+## API Key Rotation
+
+Every cloud provider above accepts a comma-separated list of keys (e.g. `key1,key2,key3`). The system automatically rotates keys on HTTP 429 — useful for chaining free-tier accounts. See [API_KEY_ROTATION.md](API_KEY_ROTATION.md) for details.
+
+---
+
 ## Environment Variables
 
 Store settings in `.env` file:
@@ -165,10 +272,14 @@ Store settings in `.env` file:
 # Provider
 LLM_PROVIDER=ollama
 
-# API Keys
+# API Keys (each accepts comma-separated values for automatic rotation)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
+MISTRAL_API_KEY=...
+DEEPSEEK_API_KEY=...
+POE_API_KEY=...
+NIM_API_KEY=...
 
 # Ollama settings
 API_ENDPOINT=http://localhost:11434/api/generate

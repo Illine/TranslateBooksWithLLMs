@@ -35,7 +35,7 @@ Solutions to common problems with TranslateBookWithLLM.
 4. Check firewall (allow port 11434)
 5. Verify endpoint in `.env`: `API_ENDPOINT=http://localhost:11434/api/generate`
 
-### "Invalid API key" (Gemini, OpenAI, OpenRouter)
+### "Invalid API key" (cloud providers)
 
 **Cause**: Wrong, expired, or missing API key.
 
@@ -47,6 +47,10 @@ Solutions to common problems with TranslateBookWithLLM.
    - Gemini: `GEMINI_API_KEY`
    - OpenAI: `OPENAI_API_KEY`
    - OpenRouter: `OPENROUTER_API_KEY`
+   - Mistral: `MISTRAL_API_KEY`
+   - DeepSeek: `DEEPSEEK_API_KEY`
+   - Poe: `POE_API_KEY`
+   - NVIDIA NIM: `NIM_API_KEY`
 
 ### "Rate limit exceeded"
 
@@ -77,7 +81,7 @@ Solutions to common problems with TranslateBookWithLLM.
 **Cause**: Chunk is too large for model's context window.
 
 **Solutions**:
-1. Reduce chunk size: `MAX_TOKENS_PER_CHUNK=200` (default: 450)
+1. Reduce chunk size: `MAX_TOKENS_PER_CHUNK=200` (default: 450 — see [src/config.py](../src/config.py))
 2. Increase context window: `OLLAMA_NUM_CTX=8192`
 3. Enable adaptive context: `AUTO_ADJUST_CONTEXT=true` (default)
 4. Use a model with larger context window
@@ -257,7 +261,7 @@ Some models (DeepSeek R1, Qwen3, QwQ, etc.) produce internal reasoning within `<
 **Cause**: File too large or wrong format.
 
 **Solutions**:
-1. Check file format: `.txt`, `.epub`, `.srt` only (PDF in development)
+1. Check file format: `.txt`, `.epub`, `.srt`, `.docx`
 2. Check file size limits
 3. Try a smaller file first
 4. Check directory permissions: `data/uploads/` must be writable
@@ -301,7 +305,7 @@ Some models (DeepSeek R1, Qwen3, QwQ, etc.) produce internal reasoning within `<
 
 **Cause**: Invalid provider name in configuration.
 
-**Valid providers**: `ollama`, `gemini`, `openai`, `openrouter`
+**Valid providers**: `ollama`, `gemini`, `openai`, `openrouter`, `mistral`, `deepseek`, `poe`, `nim`
 
 **Solutions**:
 1. Check spelling in `.env`: `LLM_PROVIDER=ollama`
