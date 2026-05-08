@@ -108,14 +108,67 @@ def validate_configuration():
 
     logger.info("✅ Configuration validated successfully")
 
-# Ensure output directory exists
-try:
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-    logger.info(f"Output folder '{OUTPUT_DIR}' is ready")
-except OSError as e:
-    logger.error(f"Critical error: Unable to create output folder '{OUTPUT_DIR}': {e}")
-    sys.exit(1)
+# Ensure output directory exists AND is actually writable.
+# A successful mkdir on Windows does not always imply write access (Controlled
+# Folder Access, restrictive ACLs, OneDrive-protected folders, antivirus EDR can
+# block the subsequent file write). We do an explicit create+delete probe and
+# emit a platform-aware actionable message on failure so users do not see a
+# generic "Failed to fetch" in the browser without context (issue #152).
+def _ensure_output_dir_writable(path):
+    from pathlib import Path
+    p = Path(path)
+
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except PermissionError as e:
+        _log_output_dir_error(p, "create", e, permission_denied=True)
+        sys.exit(1)
+    except (OSError, ValueError) as e:
+        _log_output_dir_error(p, "create", e, permission_denied=False)
+        sys.exit(1)
+
+    probe = p / ".write_test"
+    try:
+        probe.write_bytes(b"")
+        probe.unlink()
+    except PermissionError as e:
+        _log_output_dir_error(p, "write to", e, permission_denied=True)
+        sys.exit(1)
+    except (OSError, ValueError) as e:
+        _log_output_dir_error(p, "write to", e, permission_denied=False)
+        sys.exit(1)
+
+def _log_output_dir_error(path, action, exc, permission_denied):
+    sep = "=" * 70
+    logger.error("\n" + sep)
+    logger.error(f"CRITICAL: Unable to {action} output folder")
+    logger.error(sep)
+    logger.error(f"   Path: {path}")
+    logger.error(f"   Error: {exc}")
+    logger.error("")
+    if permission_denied:
+        logger.error("   This is a PERMISSION error. Common causes:")
+        if sys.platform == "win32":
+            logger.error("     - Folder is inside a protected location (Program Files, OneDrive)")
+            logger.error("     - Windows 'Controlled Folder Access' is blocking writes")
+            logger.error("     - Antivirus / EDR is blocking Python from writing here")
+        else:
+            logger.error("     - The user running this process lacks write permission")
+            logger.error("     - The folder is owned by another user or is read-only")
+        logger.error("")
+        logger.error("   How to fix:")
+        logger.error("     1. Move the project to a writable location (e.g. your home folder)")
+        logger.error("     2. Or set OUTPUT_DIR=<absolute path to a writable folder> in .env")
+        if sys.platform == "win32":
+            logger.error("     3. Or whitelist Python in Windows Defender / your antivirus")
+    else:
+        logger.error("   How to fix:")
+        logger.error("     - Verify the path is valid and the disk is not full / read-only")
+        logger.error("     - Set OUTPUT_DIR=<absolute path> in .env to override the location")
+    logger.error(sep + "\n")
+
+_ensure_output_dir_writable(OUTPUT_DIR)
+logger.info(f"Output folder '{OUTPUT_DIR}' is ready")
 
 # Static files are now handled automatically by Flask
 

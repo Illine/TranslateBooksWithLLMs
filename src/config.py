@@ -259,7 +259,12 @@ PROMPT_PRESERVE_TECHNICAL_CONTENT = True
 
 # Server configuration
 HOST = os.getenv('HOST', '127.0.0.1')
-OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'translated_files')
+# Resolve OUTPUT_DIR to an absolute path so downstream code (file listing, writes,
+# checkpoints) is independent of any later cwd change. A relative value still
+# anchors to the cwd at config-load time, which matches the previous behavior
+# (os.makedirs was already cwd-relative). The PyInstaller launcher chdir's to its
+# data folder before this module is imported, so .exe behavior is preserved.
+OUTPUT_DIR = str(Path(os.getenv('OUTPUT_DIR', 'translated_files')).expanduser().resolve())
 
 # Output filename pattern
 # Placeholders: {originalName}, {targetLang}, {sourceLang}, {model}, {date}, {datetime}, {ext}
