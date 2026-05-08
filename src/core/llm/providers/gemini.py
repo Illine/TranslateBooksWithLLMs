@@ -10,13 +10,14 @@ Features:
     - Efficient batch processing
 """
 
-from typing import Optional
+from typing import List, Optional, Union
 import httpx
 import asyncio
 
 from src.config import REQUEST_TIMEOUT, MAX_TRANSLATION_ATTEMPTS
 from ..base import LLMProvider, LLMResponse
-from ..exceptions import ContextOverflowError, RateLimitError
+from ..exceptions import ContextOverflowError
+from ..rate_limit_handler import handle_rate_limit
 
 
 class GeminiProvider(LLMProvider):
@@ -45,16 +46,17 @@ class GeminiProvider(LLMProvider):
         >>> response = await provider.generate("Translate: Hello")
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: Union[str, List[str]], model: str = "gemini-2.0-flash"):
         """
         Initialize the Gemini provider.
 
         Args:
-            api_key: Google AI API key
+            api_key: Google AI API key. Accepts a single key string OR a list
+                of keys for automatic failover on HTTP 429 (the base class wraps
+                them in a KeyPool that rotates on rate-limit).
             model: Gemini model name (default: gemini-2.0-flash)
         """
-        super().__init__(model)
-        self.api_key = api_key
+        super().__init__(model, api_keys=api_key, provider_name="gemini")
         self.api_endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     def _is_thinking_model(self) -> bool:
@@ -135,11 +137,6 @@ class GeminiProvider(LLMProvider):
         Raises:
             ContextOverflowError: If input exceeds Gemini's context window
         """
-        headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": self.api_key
-        }
-
         payload = {
             "contents": [{
                 "role": "user",
@@ -163,6 +160,11 @@ class GeminiProvider(LLMProvider):
 
         client = await self._get_client()
         for attempt in range(MAX_TRANSLATION_ATTEMPTS):
+            current_key = await self._key_pool.acquire()
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": current_key,
+            }
             try:
                 response = await client.post(
                     self.api_endpoint,
@@ -215,20 +217,13 @@ class GeminiProvider(LLMProvider):
                         error_body = e.response.text[:500]
                         error_message = f"{e} - {error_body}"
 
-                    # Handle rate limiting (429)
+                    # Handle rate limiting (429) — rotate key or sleep, raise if exhausted
                     if e.response.status_code == 429:
-                        retry_after_header = e.response.headers.get("Retry-After")
-                        wait_time = int(retry_after_header) if retry_after_header else min(2 ** (attempt + 2), 60)
-                        print(f"⚠️ Gemini rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...")
-                        if attempt < MAX_TRANSLATION_ATTEMPTS - 1:
-                            await asyncio.sleep(wait_time)
-                            continue
-                        # All retries exhausted - raise to trigger auto-pause
-                        raise RateLimitError(
-                            f"Gemini rate limit exceeded after {MAX_TRANSLATION_ATTEMPTS} attempts",
-                            retry_after=wait_time,
-                            provider="gemini"
+                        await handle_rate_limit(
+                            self._key_pool, current_key, e.response.headers,
+                            attempt, MAX_TRANSLATION_ATTEMPTS,
                         )
+                        continue
 
                     print(f"Gemini API HTTP Error (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}): {e}")
                     if error_body:

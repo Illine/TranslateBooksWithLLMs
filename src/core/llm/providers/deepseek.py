@@ -12,14 +12,15 @@ Features:
     - Auto-disables V4 reasoning by default (translation-friendly)
 """
 
-from typing import Optional
+from typing import List, Optional, Union
 import httpx
 import asyncio
 import json
 
 from src.config import REQUEST_TIMEOUT, MAX_TRANSLATION_ATTEMPTS
 from ..base import LLMProvider, LLMResponse
-from ..exceptions import ContextOverflowError, RateLimitError
+from ..exceptions import ContextOverflowError
+from ..rate_limit_handler import handle_rate_limit
 
 
 class DeepSeekProvider(LLMProvider):
@@ -63,7 +64,7 @@ class DeepSeekProvider(LLMProvider):
 
     def __init__(
         self,
-        api_key: str,
+        api_key: Union[str, List[str]],
         model: str = "deepseek-chat",
         api_endpoint: Optional[str] = None,
         disable_thinking: bool = True
@@ -78,8 +79,7 @@ class DeepSeekProvider(LLMProvider):
             disable_thinking: For models that think by default (V4 family),
                 inject ``thinking={"type":"disabled"}`` to skip reasoning tokens.
         """
-        super().__init__(model)
-        self.api_key = api_key
+        super().__init__(model, api_keys=api_key, provider_name="deepseek")
         self.api_endpoint = api_endpoint or self.API_URL
         self.disable_thinking = disable_thinking
 
@@ -204,12 +204,6 @@ class DeepSeekProvider(LLMProvider):
         Raises:
             ContextOverflowError: If input exceeds model's context window
         """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -227,6 +221,12 @@ class DeepSeekProvider(LLMProvider):
 
         client = await self._get_client()
         for attempt in range(MAX_TRANSLATION_ATTEMPTS):
+            current_key = await self._key_pool.acquire()
+            headers = {
+                "Authorization": f"Bearer {current_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
             try:
                 response = await client.post(
                     self.api_endpoint,
@@ -239,17 +239,11 @@ class DeepSeekProvider(LLMProvider):
                     raise ValueError("Invalid DeepSeek API key")
 
                 if response.status_code == 429:
-                    retry_after_header = response.headers.get("Retry-After")
-                    wait_time = int(retry_after_header) if retry_after_header else min(2 ** (attempt + 2), 60)
-                    print(f"⚠️ DeepSeek rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...")
-                    if attempt < MAX_TRANSLATION_ATTEMPTS - 1:
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise RateLimitError(
-                        f"DeepSeek rate limit exceeded after {MAX_TRANSLATION_ATTEMPTS} attempts",
-                        retry_after=wait_time,
-                        provider="deepseek"
+                    await handle_rate_limit(
+                        self._key_pool, current_key, response.headers,
+                        attempt, MAX_TRANSLATION_ATTEMPTS,
                     )
+                    continue
 
                 response.raise_for_status()
                 result = response.json()

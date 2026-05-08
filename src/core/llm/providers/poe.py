@@ -13,14 +13,15 @@ Features:
 API Documentation: https://creator.poe.com/docs/external-applications/openai-compatible-api
 """
 
-from typing import Optional, Dict, Any, Callable, List
+from typing import Optional, Dict, Any, Callable, List, Union
 import httpx
 import asyncio
 import json
 
 from src.config import REQUEST_TIMEOUT, MAX_TRANSLATION_ATTEMPTS
 from ..base import LLMProvider, LLMResponse
-from ..exceptions import ContextOverflowError, RateLimitError
+from ..exceptions import ContextOverflowError
+from ..rate_limit_handler import handle_rate_limit
 
 
 class PoeProvider(LLMProvider):
@@ -78,7 +79,7 @@ class PoeProvider(LLMProvider):
 
     def __init__(
         self,
-        api_key: str,
+        api_key: Union[str, List[str]],
         model: str = "Claude-Sonnet-4",
         api_endpoint: Optional[str] = None
     ):
@@ -90,8 +91,7 @@ class PoeProvider(LLMProvider):
             model: Bot name on Poe (default: Claude-Sonnet-4)
             api_endpoint: Optional custom API endpoint (default: https://api.poe.com/v1)
         """
-        super().__init__(model)
-        self.api_key = api_key
+        super().__init__(model, api_keys=api_key, provider_name="poe")
         self.api_endpoint = api_endpoint or self.API_URL
 
     def _get_context_limit(self) -> int:
@@ -332,12 +332,6 @@ class PoeProvider(LLMProvider):
         Raises:
             ContextOverflowError: If input exceeds model's context window
         """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-
         # Build messages array
         messages = []
         if system_prompt:
@@ -353,6 +347,12 @@ class PoeProvider(LLMProvider):
 
         client = await self._get_client()
         for attempt in range(MAX_TRANSLATION_ATTEMPTS):
+            current_key = await self._key_pool.acquire()
+            headers = {
+                "Authorization": f"Bearer {current_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
             try:
                 response = await client.post(
                     self.api_endpoint,
@@ -373,17 +373,11 @@ class PoeProvider(LLMProvider):
                     return None
 
                 if response.status_code == 429:
-                    retry_after_header = response.headers.get("Retry-After")
-                    wait_time = int(retry_after_header) if retry_after_header else min(2 ** (attempt + 2), 60)
-                    print(f"⚠️ Poe rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...")
-                    if attempt < MAX_TRANSLATION_ATTEMPTS - 1:
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise RateLimitError(
-                        f"Poe rate limit exceeded after {MAX_TRANSLATION_ATTEMPTS} attempts",
-                        retry_after=wait_time,
-                        provider="poe"
+                    await handle_rate_limit(
+                        self._key_pool, current_key, response.headers,
+                        attempt, MAX_TRANSLATION_ATTEMPTS,
                     )
+                    continue
 
                 response.raise_for_status()
                 result = response.json()

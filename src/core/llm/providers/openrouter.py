@@ -11,15 +11,15 @@ Features:
     - Automatic context size detection
 """
 
-from typing import Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, Union
 import httpx
 import asyncio
 import json
-import time
 
 from src.config import REQUEST_TIMEOUT, MAX_TRANSLATION_ATTEMPTS
 from ..base import LLMProvider, LLMResponse
-from ..exceptions import ContextOverflowError, RateLimitError
+from ..exceptions import ContextOverflowError
+from ..rate_limit_handler import handle_rate_limit
 
 
 class OpenRouterProvider(LLMProvider):
@@ -81,7 +81,7 @@ class OpenRouterProvider(LLMProvider):
         "anthropic/claude-3-5-sonnet-20241022",
     ]
 
-    def __init__(self, api_key: str, model: str = "anthropic/claude-sonnet-4"):
+    def __init__(self, api_key: Union[str, List[str]], model: str = "anthropic/claude-sonnet-4"):
         """
         Initialize the OpenRouter provider.
 
@@ -89,8 +89,7 @@ class OpenRouterProvider(LLMProvider):
             api_key: OpenRouter API key
             model: Model identifier (default: anthropic/claude-sonnet-4)
         """
-        super().__init__(model)
-        self.api_key = api_key
+        super().__init__(model, api_keys=api_key, provider_name="openrouter")
 
     @classmethod
     def get_session_cost(cls) -> tuple:
@@ -207,32 +206,6 @@ class OpenRouterProvider(LLMProvider):
         return [{"id": m, "name": m, "pricing": {"prompt": 0, "completion": 0}}
                 for m in self.FALLBACK_MODELS]
 
-    @staticmethod
-    def _compute_429_wait(headers, attempt: int) -> int:
-        """
-        Compute wait time on 429.
-
-        OpenRouter free models return X-RateLimit-Reset as a UTC timestamp in
-        milliseconds; Retry-After is usually absent. Fallback to exponential
-        backoff for upstream-provider 429s that have neither header.
-        """
-        retry_after = headers.get("Retry-After") or headers.get("retry-after")
-        if retry_after:
-            try:
-                return max(int(retry_after), 1)
-            except (ValueError, TypeError):
-                pass
-
-        reset_ms = headers.get("X-RateLimit-Reset") or headers.get("x-ratelimit-reset")
-        if reset_ms:
-            try:
-                wait = int((int(reset_ms) - time.time() * 1000) / 1000) + 1
-                return max(min(wait, 65), 1)
-            except (ValueError, TypeError):
-                pass
-
-        return min(2 ** (attempt + 2), 60)
-
     async def generate(self, prompt: str, timeout: int = REQUEST_TIMEOUT,
                       system_prompt: Optional[str] = None) -> Optional[LLMResponse]:
         """
@@ -249,13 +222,6 @@ class OpenRouterProvider(LLMProvider):
         Raises:
             ContextOverflowError: If input exceeds model's context window
         """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/hydropix/TranslateBookWithLLM",
-            "X-Title": "TranslateBookWithLLM",
-        }
-
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -272,6 +238,13 @@ class OpenRouterProvider(LLMProvider):
 
         client = await self._get_client()
         for attempt in range(MAX_TRANSLATION_ATTEMPTS):
+            current_key = await self._key_pool.acquire()
+            headers = {
+                "Authorization": f"Bearer {current_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/hydropix/TranslateBookWithLLM",
+                "X-Title": "TranslateBookWithLLM",
+            }
             try:
                 response = await client.post(
                     self.API_URL,
@@ -342,16 +315,11 @@ class OpenRouterProvider(LLMProvider):
                     error_message = f"{e} - {error_body}"
 
                 if e.response.status_code == 429:
-                    wait_time = self._compute_429_wait(e.response.headers, attempt)
-                    print(f"[OpenRouter] rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...")
-                    if attempt < MAX_TRANSLATION_ATTEMPTS - 1:
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise RateLimitError(
-                        f"OpenRouter rate limit exceeded after {MAX_TRANSLATION_ATTEMPTS} attempts",
-                        retry_after=wait_time,
-                        provider="openrouter"
+                    await handle_rate_limit(
+                        self._key_pool, current_key, e.response.headers,
+                        attempt, MAX_TRANSLATION_ATTEMPTS,
                     )
+                    continue
 
                 if e.response.status_code == 404:
                     print(f"[OpenRouter] ERROR: Model '{self.model}' not found!")

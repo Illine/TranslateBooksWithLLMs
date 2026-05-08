@@ -7,12 +7,13 @@ as well as common data structures like LLMResponse.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional, Union
 import httpx
 
 from src.config import TRANSLATE_TAG_IN, TRANSLATE_TAG_OUT, REQUEST_TIMEOUT
 from src.utils.telemetry import get_telemetry_headers
 from src.core.llm.utils.extraction import TranslationExtractor
+from src.core.llm.key_pool import KeyPool
 
 
 @dataclass
@@ -29,16 +30,42 @@ class LLMResponse:
 class LLMProvider(ABC):
     """Abstract base class for LLM providers"""
 
-    def __init__(self, model: str):
+    def __init__(
+        self,
+        model: str,
+        api_keys: Optional[Union[str, Iterable[str]]] = None,
+        provider_name: str = "",
+    ):
         """
         Initialize the LLM provider.
 
         Args:
-            model: Model name/identifier
+            model: Model name/identifier.
+            api_keys: A single API key or an iterable of keys. When given,
+                wrapped in a KeyPool that supports rotation on HTTP 429.
+                Pass None for providers that don't use API keys (e.g. Ollama).
+            provider_name: Logical name used for log messages and rate-limit
+                error reports. Defaults to the empty string ("unknown" in logs).
         """
         self.model = model
         self._extractor = TranslationExtractor(TRANSLATE_TAG_IN, TRANSLATE_TAG_OUT)
         self._client = None
+        self._key_pool: Optional[KeyPool] = None
+        if api_keys:
+            keys_iter = [api_keys] if isinstance(api_keys, str) else list(api_keys)
+            keys_iter = [k for k in keys_iter if k]
+            if keys_iter:
+                self._key_pool = KeyPool(keys_iter, provider_name=provider_name or "unknown")
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """The current 'primary' API key (first non-throttled if a pool is used).
+
+        Kept for backwards compatibility with code that reads the key directly
+        (e.g. listing models, context detection). Translation paths should
+        always use the pool's `acquire()` so rotation can happen.
+        """
+        return self._key_pool.peek() if self._key_pool else None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create a persistent HTTP client with connection pooling"""

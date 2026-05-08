@@ -5,13 +5,14 @@ This module provides the OpenAICompatibleProvider class for interacting with
 OpenAI API and compatible endpoints (llama.cpp, LM Studio, vLLM, OpenAI, etc.).
 """
 
-from typing import Optional, Callable
+from typing import List, Optional, Callable, Union
 import asyncio
 import json
 import httpx
 
 from ..base import LLMProvider, LLMResponse
-from ..exceptions import ContextOverflowError, RateLimitError
+from ..exceptions import ContextOverflowError
+from ..rate_limit_handler import handle_rate_limit
 from ..utils.context_detection import ContextDetector
 
 from src.config import (
@@ -24,11 +25,13 @@ from src.config import (
 class OpenAICompatibleProvider(LLMProvider):
     """OpenAI-compatible API provider (works with llama.cpp, LM Studio, vLLM, OpenAI, etc.)"""
 
-    def __init__(self, api_endpoint: str, model: str, api_key: Optional[str] = None,
-                 context_window: int = OLLAMA_NUM_CTX, log_callback: Optional[Callable] = None):
-        super().__init__(model)
+    def __init__(self, api_endpoint: str, model: str,
+                 api_key: Optional[Union[str, List[str]]] = None,
+                 context_window: int = OLLAMA_NUM_CTX, log_callback: Optional[Callable] = None,
+                 provider_name: str = "openai-compatible"):
+        # Skip pool creation if no key (local servers like llama.cpp don't need one)
+        super().__init__(model, api_keys=api_key, provider_name=provider_name)
         self.api_endpoint = self._normalize_endpoint(api_endpoint)
-        self.api_key = api_key
         self.context_window = context_window
         self.log_callback = log_callback
         self._detected_context_size: Optional[int] = None
@@ -88,10 +91,6 @@ class OpenAICompatibleProvider(LLMProvider):
         Returns:
             LLMResponse with content and token usage info, or None if failed
         """
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
         # Build messages array with optional system prompt
         messages = []
         if system_prompt:
@@ -113,6 +112,10 @@ class OpenAICompatibleProvider(LLMProvider):
 
         client = await self._get_client()
         for attempt in range(MAX_TRANSLATION_ATTEMPTS):
+            current_key = await self._key_pool.acquire() if self._key_pool else None
+            headers = {"Content-Type": "application/json"}
+            if current_key:
+                headers["Authorization"] = f"Bearer {current_key}"
             try:
                 response = await client.post(
                     self.api_endpoint,
@@ -198,23 +201,14 @@ class OpenAICompatibleProvider(LLMProvider):
                     except:
                         error_message = f"{e} - {error_body}"
 
-                # Handle rate limiting (429)
-                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
-                    retry_after_header = e.response.headers.get("Retry-After")
-                    wait_time = int(retry_after_header) if retry_after_header else min(2 ** (attempt + 2), 60)
-                    if self.log_callback:
-                        self.log_callback("llm_rate_limit",
-                            f"{YELLOW}⚠️ Rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...{RESET}")
-                    else:
-                        print(f"⚠️ Rate limited (attempt {attempt + 1}/{MAX_TRANSLATION_ATTEMPTS}), waiting {wait_time}s...")
-                    if attempt < MAX_TRANSLATION_ATTEMPTS - 1:
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise RateLimitError(
-                        f"Rate limit exceeded after {MAX_TRANSLATION_ATTEMPTS} attempts",
-                        retry_after=wait_time,
-                        provider="openai-compatible"
+                # Handle rate limiting (429) — rotate key or sleep, raise if exhausted
+                if (hasattr(e, 'response') and e.response is not None
+                        and e.response.status_code == 429 and self._key_pool):
+                    await handle_rate_limit(
+                        self._key_pool, current_key, e.response.headers,
+                        attempt, MAX_TRANSLATION_ATTEMPTS, self.log_callback,
                     )
+                    continue
 
                 # Detect context overflow errors
                 context_overflow_keywords = ["context_length", "maximum context", "token limit",
