@@ -55,7 +55,7 @@
         "accuracy": 9.5,
         "fluency": 9.0,
         "style": 9.0,
-        "overall": 8.0,
+        "overall": 7.7,
         "feedback": "Adds 狭义 (special) qualifier not in source (-0.5 acc, mild hallucination of scope); otherwise clean technical Chinese, 真空中 for 'in vacuo' is correct convention."
       }
     },
@@ -70,7 +70,7 @@
         "accuracy": 7.7,
         "fluency": 9.0,
         "style": 7.5,
-        "overall": 6.2,
+        "overall": 5.9,
         "feedback": "Major contresens: 'betraying their perception' → 却并未察觉 reverses meaning (-2.0 acc; betraying = revealing here, not failing). 'Trust thyself' archaic register lost (-0.5 style). Capped by acc < 8 and damning core error."
       }
     },
@@ -160,7 +160,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.6,
+        "overall": 7.3,
         "feedback": "'Live deliberately' → 活得深刻 drifts (深刻 = profound, not deliberate, -0.5 acc); 苟活于非生命之境 strong literary phrasing; 精髓 weakens 'marrow' metaphor (-0.3 style)."
       }
     },
@@ -220,7 +220,7 @@
         "accuracy": 7.9,
         "fluency": 9.0,
         "style": 7.5,
-        "overall": 6.8,
+        "overall": 6.7,
         "feedback": "Same contresens as zh: 'betraying their perception' → 'traicionando su percepción' calques the wrong meaning (-1.8 acc); 'Trust thyself' → modern 'Confía' loses register (-0.5 style). Capped by core meaning error."
       }
     },
@@ -265,7 +265,7 @@
         "accuracy": 9.5,
         "fluency": 8.5,
         "style": 8.0,
-        "overall": 7.3,
+        "overall": 7.0,
         "feedback": "'Debe necesitar una esposa' is flat compared to Spanish classics' 'ha de necesitar' (-0.5 style); 'su primera entrada en un vecindario' is translationese (-0.5 flu); semantics intact."
       }
     },
@@ -310,7 +310,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.5,
+        "overall": 7.3,
         "feedback": "'Suck out all the marrow' → 'succionar todo el jugo' (juice, not marrow) loses the metaphor (-0.5 acc, -0.5 style); 'vivir deliberadamente' is a workable calque; reflective tone preserved."
       }
     },
@@ -340,7 +340,7 @@
         "accuracy": 6.5,
         "fluency": 8.0,
         "style": 7.5,
-        "overall": 6.5,
+        "overall": 6.2,
         "feedback": "Severe: 'odorat riche' is a category error (sense of smell, not the smell, -1.0 flu); 'studio' → 'pièce' (-0.5 acc); 'épines fleurie de rose' grammar break + wrong botanical (-1.0 acc); 'laburnum' left untranslated (FR = cytise, -1.5 acc); 'saddle-bags' → 'coussins'. Multiple compounding errors."
       }
     },
@@ -430,7 +430,7 @@
         "accuracy": 9.0,
         "fluency": 7.5,
         "style": 7.5,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Voided verb in 'N'avez-vous pas, sans aucun doute, la portée de ma découverte?' — missing 'vu/saisi' breaks the question grammatically (-1.5 flu); 'je perçois' is a calque for 'I perceive' (-0.5 flu); haemoglobine/médico-légale correct."
       }
     },
@@ -490,7 +490,7 @@
         "accuracy": 7.0,
         "fluency": 8.0,
         "style": 7.5,
-        "overall": 6.4,
+        "overall": 6.1,
         "feedback": "Multiple errors: 'lilac' → hoa tử đằng (wisteria, should be tử đinh hương, -0.5 acc); 'saddle-bags' → thảm (rug, -0.5 acc); critical hallucination 'thuốc lào' (water-pipe tobacco) added on top of 'thuốc lá' (cigarettes) (-1.5 acc); 'studio' → 'căn phòng' (-0.5 acc); 'laburnum' kept in Latin (-0.5 flu)."
       }
     },

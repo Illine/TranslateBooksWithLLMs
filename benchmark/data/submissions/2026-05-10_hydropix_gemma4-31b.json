@@ -55,7 +55,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "Clean technical Chinese for relativity passage; minor tense/aspect drift on 'developed in Section VII' rendered as 将...阐述 (future) instead of past (-0.5 acc), but logical structure intact."
       }
     },
@@ -115,7 +115,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 7.5,
-        "overall": 7.2,
+        "overall": 6.9,
         "feedback": "Famous opening restructured ('这在社交界被认为是普遍真理') breaks Austen's punchline rhythm (-0.5 style); 'must be in want of a wife' overstated to 必然渴望娶 (must yearn to marry) loses ironic 'lacking' connotation (-0.5 style + -0.3 acc)."
       }
     },
@@ -160,7 +160,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.9,
+        "overall": 7.6,
         "feedback": "'live deliberately' rendered as 生活得有意义 (live meaningfully) is a slight semantic drift from 'with intention' (-0.5 acc); 'practise resignation' → 习惯于无奈的妥协 captures sense but weakens the philosophical register (-0.3 style)."
       }
     },
@@ -205,7 +205,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.5,
         "feedback": "Clean Spanish physics prose; 'tácitamente asumido' and 'en el vacío' for 'in vacuo' are conventionally correct; reasoning chain ('si descartamos... entonces desaparece') intact."
       }
     },
@@ -265,7 +265,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.6,
+        "overall": 7.3,
         "feedback": "'Es una verdad universalmente reconocida' matches the canonical Spanish opening; 'debe de sentir la necesidad de casarse' uses inferential 'debe de' which carries Austen's irony well; 'caballero' adds period flavor."
       }
     },
@@ -355,7 +355,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.2,
         "feedback": "Opening 'Désormais, avant l'avènement' misuses 'Désormais' (= henceforth) where Einstein's 'Now' is a discourse particle ('Or...') (-0.5 acc, -0.5 fluency); 'lumière dans le vide' and 'simultanéité' are conventionally correct."
       }
     },
@@ -415,7 +415,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "Matches the canonical French Austen opening; 'aussi peu connus que puissent être les sentiments' is a strong concessive construction; closing 'propriété légitime' preserves the property-conceit irony."
       }
     },
@@ -475,7 +475,7 @@
         "accuracy": 8.0,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.3,
+        "overall": 7.0,
         "feedback": "Opening contresens: 'Do, soul, do' rendered 'Hãy nhìn lại đi' (Look back, soul) instead of imperative 'làm đi' — meaning reversed at a load-bearing line (-1.5 acc); 'phù phiếm' adds editorial color not in source (-0.3 acc); otherwise archaic Vietnamese register apt."
       }
     },
@@ -490,7 +490,7 @@
         "accuracy": 7.5,
         "fluency": 9.0,
         "style": 7.5,
-        "overall": 6.1,
+        "overall": 5.8,
         "feedback": "Multiple botanical/material errors in a Wilde passage where imagery is the point: 'pink-flowering thorn' → 'gai hoa hồng' (rose thorn) (-0.5 acc); 'Persian saddle-bags' → 'vải dệt kiểu Ba Tư' (Persian-style fabric) (-1.0 acc); 'laburnum' → 'cây phi yến' (delphinium/larkspur, wrong species) (-1.0 acc, -0.5 style)."
       }
     },
@@ -505,7 +505,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.5,
+        "overall": 7.2,
         "feedback": "Strong Vietnamese physics register; 'hệ quy chiếu', 'tính đồng thời', 'truyền ánh sáng trong chân không' are all conventional; past tense on 'đã được triển khai' correct for Einstein's reference."
       }
     },
@@ -550,7 +550,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.5,
+        "overall": 7.2,
         "feedback": "Faithful Vietnamese scientific prose; Darwin's hedging ('chắc chắn', 'tôi hy vọng', 'không tránh khỏi') preserved; 'nguồn tài liệu uy tín' is the right register for 'good authorities'."
       }
     },
@@ -595,7 +595,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.3,
+        "overall": 7.0,
         "feedback": "Twain's ironic deflation preserved; 'minh chứng không thể sai lệch' is the right register for 'infallible proof'; closing 'đó chỉ là đồ thời Phục hưng thôi' captures the dismissive tone with the colloquial 'đồ'."
       }
     },
@@ -685,7 +685,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.5,
         "feedback": "Faithful Chinese rendering of Sōseki; '与其说...不如说' captures 世間を憚る 遠慮 elegantly; '即便在动笔写作时，心情也是一样' preserves the writerly reflection of 筆を執っても心持は同じ事である."
       }
     },
@@ -1030,7 +1030,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.9,
         "feedback": "Clean technical JA with proper 真空中 and 基準 conventions."
       }
     },

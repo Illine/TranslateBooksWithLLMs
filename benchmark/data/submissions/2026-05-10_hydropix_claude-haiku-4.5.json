@@ -55,7 +55,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.3,
+        "overall": 8.0,
         "feedback": "Clean scientific Chinese; 'in vacuo'→'在真空中' standard, conditional logic preserved. Capped at 9.0 without published reference (−1.5 style for minor register)."
       }
     },
@@ -265,7 +265,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.9,
+        "overall": 7.6,
         "feedback": "'debe estar en busca de esposa' (= actively looking for) tilts away from Austen's 'in want of' implying social need. Irony partially flattened (−0.5 acc, −2.0 style)."
       }
     },
@@ -505,7 +505,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.4,
+        "overall": 8.1,
         "feedback": "Clean scientific Vietnamese; 'trong chân không' standard physics term, 'tính đồng thời' for simultaneity precise. Argumentative chain preserved (−1.5 style)."
       }
     },
@@ -565,7 +565,7 @@
         "accuracy": 8.0,
         "fluency": 8.5,
         "style": 7.5,
-        "overall": 7.2,
+        "overall": 6.9,
         "feedback": "Critical typo: 'được công nhân rộng rãi' uses 'công nhân' (=worker) instead of 'công nhận' (=acknowledged) — wrong-word substitution that distorts the famous opener (−1.0 acc, −1.0 fluency). Austen's irony partially flattened (−2.5 style)."
       }
     },

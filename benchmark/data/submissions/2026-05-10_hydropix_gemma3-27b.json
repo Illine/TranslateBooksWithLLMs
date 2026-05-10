@@ -25,7 +25,7 @@
         "accuracy": 7.0,
         "fluency": 8.5,
         "style": 7.0,
-        "overall": 6.5,
+        "overall": 6.2,
         "feedback": "Contresens majeur sur l'incipit 'Do, soul, do' rendu par '为所欲为' (do as one pleases). Registre stoïque gnomique aplati. (-2.0 acc, -1.0 style)"
       }
     },
@@ -55,7 +55,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.1,
+        "overall": 6.8,
         "feedback": "Technically precise with established physics terms; '默契地' (mutual tacit) is a calque for 'tacitly' (silently). (-0.3 accuracy)"
       }
     },
@@ -100,7 +100,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.1,
+        "overall": 6.8,
         "feedback": "Faithful to Darwin's qualified scientific tone; '恳请' is slightly stronger than 'I must trust' but preserves the spirit. (-0.3 style)"
       }
     },
@@ -160,7 +160,7 @@
         "accuracy": 8.0,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Slight semantic drift on 'deliberately' (→ '有目的'), 'what was not life' (→ '虚伪的生活'), 'practise resignation' (→ '轻易放弃'). Reflective tone preserved. (-1.5 accuracy aggregate)"
       }
     },
@@ -175,7 +175,7 @@
         "accuracy": 8.5,
         "fluency": 7.5,
         "style": 7.5,
-        "overall": 6.3,
+        "overall": 6.0,
         "feedback": "Grammar error: 'deja de vagar y deambulando' mixes infinitive and gerund (should be 'vagar y deambular'). Archaic Stoic register reasonably attempted. (-1.5 fluency)"
       }
     },
@@ -205,7 +205,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.2,
         "feedback": "Excellent technical Spanish; established physics terminology ('en el vacío', 'simultaneidad', 'principio de relatividad'); conditional argument preserved cleanly."
       }
     },
@@ -265,7 +265,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Preserves Austen's 'Es una verdad universalmente reconocida' framing (canonical Spanish opener); ironic register intact. The strongest Pride and Prejudice rendering of the four."
       }
     },
@@ -295,7 +295,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.2,
+        "overall": 6.9,
         "feedback": "Captures Twain's deflationary irony cleanly in idiomatic Spanish; faithful rendering throughout."
       }
     },
@@ -310,7 +310,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.6,
         "feedback": "Excellent: bone-marrow metaphor preserved as 'extraer hasta la médula'; contemplative tone intact; 'No quería vivir una vida que no fuera vida' captures Thoreau's tautology."
       }
     },
@@ -355,7 +355,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.5,
         "feedback": "Excellent technical French; 'paragraphe VII' for 'Section VII' is a minor convention choice but acceptable in French academic writing."
       }
     },
@@ -400,7 +400,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.7,
+        "overall": 7.4,
         "feedback": "Period-appropriate scientific French ('Cet Abrégé', 'sera forcément imparfait'); Darwin's hedging fully preserved."
       }
     },
@@ -415,7 +415,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 7.0,
-        "overall": 7.1,
+        "overall": 6.8,
         "feedback": "'Généralement admis' is significantly weaker than 'universally acknowledged'; loses Austen's mock-universal framing that drives the chapter. (-1.0 style)"
       }
     },
@@ -430,7 +430,7 @@
         "accuracy": 8.5,
         "fluency": 7.5,
         "style": 8.0,
-        "overall": 6.7,
+        "overall": 6.4,
         "feedback": "Period-appropriate French dialogue, but contains a broken sentence: 'La question est maintenant de savoir en est-on à l'hémoglobine'. (-1.5 fluency grammar)"
       }
     },
@@ -460,7 +460,7 @@
         "accuracy": 9.0,
         "fluency": 8.5,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "Faithful contemplative French; 'vivre une vie sans en être' is awkward as a rendering of 'live what was not life'. (-0.5 fluency)"
       }
     },
@@ -475,7 +475,7 @@
         "accuracy": 8.7,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Captures Stoic imperative tone with archaic 'ngươi'; minor semantic compression on 'affording thyself no respect'. (-0.3 accuracy)"
       }
     },
@@ -505,7 +505,7 @@
         "accuracy": 8.7,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.2,
+        "overall": 6.9,
         "feedback": "Strong technical Vietnamese with established physics terminology; 'việc đo thời gian' slightly shifts 'statement of time' to 'measurement of time'. (-0.3 accuracy)"
       }
     },
@@ -550,7 +550,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.2,
+        "overall": 6.9,
         "feedback": "Faithful Vietnamese rendering of Darwin's hedged scientific stance; clean academic register."
       }
     },
@@ -565,7 +565,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 7.0,
-        "overall": 6.9,
+        "overall": 6.6,
         "feedback": "Natural Vietnamese, but 'Người ta thường nói' (people often say) flattens the universal-truth opener that drives Austen's irony. (-1.0 style)"
       }
     },
@@ -595,7 +595,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Excellent Vietnamese rendering of Twain's deflationary irony; 'mà thôi' adds an idiomatic Vietnamese closing particle that captures the dismissive tone."
       }
     },
@@ -610,7 +610,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.0,
+        "overall": 6.7,
         "feedback": "Idiomatic Vietnamese with 'nhắm mắt xuôi tay' for the deathbed image; 'tinh túy' (essence) abstracts Thoreau's bone-marrow physical metaphor. (-0.3 acc, -0.5 style)"
       }
     },
@@ -625,7 +625,7 @@
         "accuracy": 8.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.2,
         "feedback": "Smooth Sōseki rendering with proper '老师' as common-noun-as-address; mistranslates 頭文字 (initials) as '姓氏或头衔' (surname or title). (-1.0 accuracy)"
       }
     },
@@ -640,7 +640,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "Strong literary rendering: correctly preserves 'Sensei' as romanized cultural term; handles 頭文字 properly as 'initials'. Reads as natural English literary prose."
       }
     },
@@ -730,7 +730,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 8.2,
+        "overall": 8.0,
         "feedback": "Clear, accurate scientific German; 'Bewegungszustand des Bezugssystems' is correct; minor reframing of 'body of reference' as 'Bezugssystem'."
       }
     },
@@ -880,7 +880,7 @@
         "accuracy": 8.5,
         "fluency": 8.0,
         "style": 8.0,
-        "overall": 8.0,
+        "overall": 7.9,
         "feedback": "Awkward adverb placement 'sempre se tacitamente assumiu' (should be 'assumiu-se tacitamente'); otherwise clear scientific PT. (-0.5 flu)"
       }
     },
@@ -1075,7 +1075,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.0,
-        "overall": 8.1,
+        "overall": 7.9,
         "feedback": "Faithful Darwin in JA; the qualified hedging preserved."
       }
     },
@@ -1180,7 +1180,7 @@
         "accuracy": 8.5,
         "fluency": 8.0,
         "style": 8.0,
-        "overall": 8.0,
+        "overall": 7.9,
         "feedback": "Solid scientific KR; '광의 전파' uses Sino-Korean while modern usage prefers '빛의 전파'. (-0.3 flu)"
       }
     },
@@ -1330,7 +1330,7 @@
         "accuracy": 8.0,
         "fluency": 8.5,
         "style": 8.0,
-        "overall": 8.0,
+        "overall": 7.9,
         "feedback": "'измерение времени' shifts 'statement of time' toward 'measurement'; meaning largely preserved. (-0.5 acc)"
       }
     },
@@ -1630,7 +1630,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.9,
         "feedback": "Clean scientific Arabic Einstein; 'الجسم المرجعي' precise."
       }
     },
@@ -1675,7 +1675,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.9,
         "feedback": "Strong classical AR Darwin; the qualified hedging preserved."
       }
     },
@@ -1825,7 +1825,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.9,
         "feedback": "Solid formal HI Darwin; the scientific hedging preserved."
       }
     },

@@ -100,7 +100,7 @@
         "accuracy": 9.0,
         "fluency": 8.7,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "All Darwin's epistemic hedging preserved (毫无疑问, 我希望, 恳请). Solid 19th-c. scientific Chinese register."
       }
     },
@@ -205,7 +205,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.4,
+        "overall": 8.1,
         "feedback": "Standard Spanish physics register (cuerpo de referencia, en el vacío, simultaneidad). All hedges and connectors preserved."
       }
     },
@@ -355,7 +355,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.7,
-        "overall": 8.4,
+        "overall": 8.1,
         "feedback": "Standard French physics register: 'tacitement admis', 'corps de référence', 'dans le vide'. Argument structure preserved with no logical drift."
       }
     },
@@ -505,7 +505,7 @@
         "accuracy": 8.7,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.8,
         "feedback": "'Hệ quy chiếu' is correct technical Vietnamese. 'Khái niệm thời gian' for 'statement of time' slightly drifts to 'concept of time'. −0.3 acc."
       }
     },
@@ -610,7 +610,7 @@
         "accuracy": 8.7,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.3,
+        "overall": 7.0,
         "feedback": "'Tinh túy' for 'marrow' loses the visceral metaphor (replaced by 'essence'). Otherwise Thoreau's contemplative register reads beautifully. −0.5 style, −0.3 acc."
       }
     },

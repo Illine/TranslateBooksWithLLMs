@@ -25,7 +25,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 6.8,
+        "overall": 6.5,
         "feedback": "Opening 'Do, soul, do' rendered as 振作起来 ('cheer up') reverses the sarcastic Stoic self-rebuke into encouragement, weakening the bite (−1.5 acc). Modernizing exclamation 啊！ slightly flattens gnomic register (−0.5 sty)."
       }
     },
@@ -55,7 +55,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.7,
+        "overall": 7.4,
         "feedback": "Clean technical translation: 真空中, 相对性原理, 同时性 all standard. 'Tacitly' rendered as 默认 — passable but slightly weaker than 暗中 / 默而不言. No real errors."
       }
     },
@@ -160,7 +160,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.0,
-        "overall": 7.3,
+        "overall": 7.0,
         "feedback": "'Live deliberately' as 活得有意义 (meaningful) drifts from intentional/purposeful nuance (−0.3 acc). 'Marrow of life' as 精华 (essence) loses the visceral marrow image (−0.5 sty); a recurring weak spot for this model."
       }
     },
@@ -205,7 +205,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.8,
         "feedback": "All physics terminology correct: simultaneidad, vacío, propagación. Logical connectors clean (Ahora, es decir, si...). Einstein's careful argumentation preserved without inflation."
       }
     },
@@ -310,7 +310,7 @@
         "accuracy": 8.5,
         "fluency": 8.5,
         "style": 8.0,
-        "overall": 7.2,
+        "overall": 7.0,
         "feedback": "'Suck out the marrow of life' as 'extraer hasta la última gota de la esencia' loses the visceral marrow image (−0.5 sty), recurring Mistral weakness. 'Solo' before 'a los hechos' is positionally ambiguous (only/alone) (−0.3 flu)."
       }
     },
@@ -355,7 +355,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 8.1,
+        "overall": 7.8,
         "feedback": "All Einstein terminology correct: simultanéité, vide, propagation, principe de relativité. 'Tacitement admettre' is the standard French calque. Argumentation flows without inflation."
       }
     },
@@ -400,7 +400,7 @@
         "accuracy": 7.5,
         "fluency": 8.0,
         "style": 8.5,
-        "overall": 7.4,
+        "overall": 7.1,
         "feedback": "'This Abstract' left as 'Cet Abstract' — English source word inside French target (−1.5 acc, −1.0 flu). Should be 'résumé' or 'abrégé'. The rest of the rendering is otherwise excellent in its 19th-c. scientific French register."
       }
     },
@@ -505,7 +505,7 @@
         "accuracy": 9.0,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.5,
         "feedback": "All physics terminology correct: thuyết tương đối, chân không, đồng thời, nguyên lý tương đối. Argumentation logically clean. Vietnamese reads as native scientific prose, not translated."
       }
     },
@@ -550,7 +550,7 @@
         "accuracy": 8.5,
         "fluency": 9.0,
         "style": 8.5,
-        "overall": 7.8,
+        "overall": 7.5,
         "feedback": "'Suffice' as 'đủ thuyết phục' (convincing) drifts from 'be enough' (−0.3 acc). Doubled 'tin tưởng/tin tưởng' nicely mirrors 'trust/confidence' from source. 19th-c scientific Vietnamese register held."
       }
     },
