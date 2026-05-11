@@ -570,3 +570,230 @@ class Submission:
     @classmethod
     def from_json(cls, json_str: str) -> "Submission":
         return cls.from_dict(json.loads(json_str))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Split-layout models (schema_version 2.0)
+# benchmark/data/translations/<model-slug>.json     ← TranslationsFile
+# benchmark/data/judgments/<judge-id>.json          ← JudgmentsFile
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class TranslationEntry:
+    """One translation in a TranslationsFile."""
+
+    text_id: str
+    source_lang: str
+    target_lang: str
+    output: str
+    output_hash: str
+    translation_latency_ms: int = 0
+    produced_at: Optional[str] = None
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.text_id, self.target_lang)
+
+    def to_dict(self) -> dict:
+        d = {
+            "text_id": self.text_id,
+            "source_lang": self.source_lang,
+            "target_lang": self.target_lang,
+            "output": self.output,
+            "output_hash": self.output_hash,
+        }
+        if self.translation_latency_ms > 0:
+            d["translation_latency_ms"] = self.translation_latency_ms
+        if self.produced_at:
+            d["produced_at"] = self.produced_at
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TranslationEntry":
+        return cls(
+            text_id=data["text_id"],
+            source_lang=data["source_lang"],
+            target_lang=data["target_lang"],
+            output=data["output"],
+            output_hash=data["output_hash"],
+            translation_latency_ms=int(data.get("translation_latency_ms", 0)),
+            produced_at=data.get("produced_at"),
+        )
+
+
+@dataclass
+class TranslationsFile:
+    """All translations a model has produced. Loaded from translations/<slug>.json."""
+
+    schema_version: str
+    model_provider: str
+    model_id: str
+    tbl_version: str
+    prompt_version: str
+    contributors: list[dict]
+    translations: list[TranslationEntry]
+
+    def by_key(self) -> dict[tuple[str, str], TranslationEntry]:
+        return {t.key: t for t in self.translations}
+
+    def to_dict(self) -> dict:
+        return {
+            "schema_version": self.schema_version,
+            "model": {"provider": self.model_provider, "id": self.model_id},
+            "environment": {
+                "tbl_version": self.tbl_version,
+                "prompt_version": self.prompt_version,
+            },
+            "contributors": list(self.contributors),
+            "translations": [t.to_dict() for t in self.translations],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TranslationsFile":
+        return cls(
+            schema_version=data.get("schema_version", "2.0"),
+            model_provider=data["model"]["provider"],
+            model_id=data["model"]["id"],
+            tbl_version=data["environment"]["tbl_version"],
+            prompt_version=data["environment"]["prompt_version"],
+            contributors=list(data.get("contributors", [])),
+            translations=[TranslationEntry.from_dict(t) for t in data["translations"]],
+        )
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "TranslationsFile":
+        return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class JudgmentScore:
+    """One score entry in a JudgmentsFile."""
+
+    model_id: str
+    text_id: str
+    target_lang: str
+    output_hash: str
+    accuracy: float
+    fluency: float
+    style: float
+    overall: float
+    feedback: Optional[str] = None
+    evaluation_time_ms: int = 0
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        return (self.model_id, self.text_id, self.target_lang)
+
+    def to_dict(self) -> dict:
+        d = {
+            "model_id": self.model_id,
+            "text_id": self.text_id,
+            "target_lang": self.target_lang,
+            "output_hash": self.output_hash,
+            "accuracy": self.accuracy,
+            "fluency": self.fluency,
+            "style": self.style,
+            "overall": self.overall,
+        }
+        if self.feedback:
+            d["feedback"] = self.feedback
+        if self.evaluation_time_ms > 0:
+            d["evaluation_time_ms"] = self.evaluation_time_ms
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "JudgmentScore":
+        return cls(
+            model_id=data["model_id"],
+            text_id=data["text_id"],
+            target_lang=data["target_lang"],
+            output_hash=data["output_hash"],
+            accuracy=float(data["accuracy"]),
+            fluency=float(data["fluency"]),
+            style=float(data["style"]),
+            overall=float(data["overall"]),
+            feedback=data.get("feedback"),
+            evaluation_time_ms=int(data.get("evaluation_time_ms", 0)),
+        )
+
+
+@dataclass
+class JudgmentsFile:
+    """All scores from one judge configuration. Loaded from judgments/<judge-id>.json."""
+
+    schema_version: str
+    judge_id: str
+    judge_model: str
+    rubric_version: str
+    judge_provider: str
+    run_id: str
+    started_at: str
+    completed_at: str
+    scores: list[JudgmentScore]
+    judge_temperature: Optional[float] = None
+    judge_seed: Optional[int] = None
+    judge_thinking: Optional[str] = None
+    run_notes: Optional[str] = None
+
+    def by_key(self) -> dict[tuple[str, str, str], JudgmentScore]:
+        return {s.key: s for s in self.scores}
+
+    def to_dict(self) -> dict:
+        judge = {
+            "id": self.judge_id,
+            "model": self.judge_model,
+            "rubric_version": self.rubric_version,
+            "provider": self.judge_provider,
+        }
+        if self.judge_temperature is not None:
+            judge["temperature"] = self.judge_temperature
+        if self.judge_seed is not None:
+            judge["seed"] = self.judge_seed
+        if self.judge_thinking is not None:
+            judge["thinking"] = self.judge_thinking
+
+        run = {
+            "id": self.run_id,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+        }
+        if self.run_notes:
+            run["notes"] = self.run_notes
+
+        return {
+            "schema_version": self.schema_version,
+            "judge": judge,
+            "run": run,
+            "scores": [s.to_dict() for s in self.scores],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "JudgmentsFile":
+        j = data["judge"]
+        r = data["run"]
+        return cls(
+            schema_version=data.get("schema_version", "2.0"),
+            judge_id=j["id"],
+            judge_model=j["model"],
+            rubric_version=j["rubric_version"],
+            judge_provider=j["provider"],
+            judge_temperature=j.get("temperature"),
+            judge_seed=j.get("seed"),
+            judge_thinking=j.get("thinking"),
+            run_id=r["id"],
+            started_at=r["started_at"],
+            completed_at=r["completed_at"],
+            run_notes=r.get("notes"),
+            scores=[JudgmentScore.from_dict(s) for s in data.get("scores", [])],
+        )
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "JudgmentsFile":
+        return cls.from_dict(json.loads(json_str))

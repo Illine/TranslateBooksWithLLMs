@@ -1,13 +1,13 @@
-# Republish the v2 wiki from current submissions
+# Republish the v2 wiki from translations + judgments (split layout)
 
-Aggregate every submission in `benchmark/data/submissions/`, regenerate the
-wiki locally, and push it to the wiki repo. Use this after adding new
-submissions on `main` when the auto `publish-wiki.yml` workflow hasn't fired
-or is failing (typically when `WIKI_PUSH_TOKEN` isn't configured).
+Aggregate the v2 split layout (`benchmark/data/translations/` joined with
+`benchmark/data/judgments/<active-judge>.json`), regenerate the wiki locally,
+and push it to the wiki repo. Use this after a re-judge run or after adding
+new translations on `main`.
 
 **No args.**
 
-The skill is **idempotent**: re-running with no new submissions just confirms
+The skill is **idempotent**: re-running with no new data just confirms
 "no changes" and exits cleanly.
 
 ---
@@ -21,41 +21,53 @@ git branch --show-current && git status -s | head -20
 ```
 
 If on a feature branch, ask the user whether to switch to `main` first
-(`AskUserQuestion`). The wiki should reflect what's on `main`, not on a
-feature branch.
+(`AskUserQuestion`). The wiki should reflect what's on `main`.
 
-If there are uncommitted submission files in `benchmark/data/submissions/`,
-list them and ask the user whether they want to commit them now or proceed
-with what's already on remote.
-
----
-
-## Step 2 — Validate all submissions
-
-```
-python scripts/validate_submission.py benchmark/data/submissions/*.json
-```
-
-If any submission fails the schema, **stop**. Surface the failing file and
-the schema error to the user. Don't republish a wiki built from an invalid
-submission.
+If there are uncommitted files in `benchmark/data/translations/` or
+`benchmark/data/judgments/`, list them and ask the user whether to commit them
+now or proceed with what's on remote.
 
 ---
 
-## Step 3 — Aggregate submissions
+## Step 2 — Identify the active judge
 
 ```
-python -m benchmark.cli aggregate-submissions --run-id aggregated --output benchmark_results/aggregated.json --allow-empty
+ls benchmark/data/judgments/
 ```
 
-Capture the printed stats:
-- `Submissions: N`
-- `Raw results: M`
-- `Aggregated results: K`
-- `Conflicts (>=2 obs): C` — number of triples with multiple observations
-- `Models: P`, `Languages: Q`
+If exactly one judgment file → that's the active judge.
+If more than one, ask the user via `AskUserQuestion` which one to publish
+(typically `claude-opus-4-7-rubric-v2-poe.json`). Pass the chosen
+`<judge-id>` (filename without `.json`) to the next steps.
 
-If `Submissions: 0`, stop and tell the user there's nothing to publish.
+If zero, **stop**: nothing to publish. Tell the user to run
+`scripts/rejudge_all_via_poe.py` first.
+
+---
+
+## Step 3 — Aggregate (join translations + judgments)
+
+```
+python -m benchmark.cli aggregate \
+    --judge-id <judge-id> \
+    --run-id aggregated \
+    --output benchmark_results/aggregated.json
+```
+
+Capture the printed stats from the aggregator:
+- `translation files: T`
+- `translations:      N`
+- `judgment files:    J`
+- `scores:            S`
+- `matched:           M`
+- `unjudged:          U`
+- (any `HASH MISMATCHES` or `orphan scores`)
+
+If `HASH MISMATCHES > 0`, **stop**. There's an integrity error between
+translations and judgments — surface the issue and don't publish.
+
+If `unjudged > 0`, warn the user: some translations have no score under the
+active judge. Offer to run the re-judge to fill the gap before continuing.
 
 ---
 
@@ -66,7 +78,7 @@ rm -rf wiki/ && python -m benchmark.cli wiki aggregated
 ```
 
 The fresh `rm -rf` is important — leftover files from earlier runs (e.g.
-languages tested but no longer in submissions) would otherwise survive and
+languages tested but no longer in translations) would otherwise survive and
 publish stale pages.
 
 Confirm the output:
@@ -90,7 +102,7 @@ WIKI_URL=$(git remote get-url origin | sed 's/\.git$//').wiki.git
 rm -rf .wiki_repo_archive && git clone "$WIKI_URL" .wiki_repo_archive
 ```
 
-(On Windows, use the PowerShell equivalent or run the two commands manually.)
+(On Windows / PowerShell, run the two commands manually.)
 
 If the clone fails ("repository not found"), inform the user that the wiki
 needs at least one page created via the GitHub UI before automated tools can
@@ -101,53 +113,46 @@ Once cloned, sync v2 content while preserving archive pages:
 ```
 cd .wiki_repo_archive && \
   find . -maxdepth 1 -name 'Language-*.md' ! -name 'Archive-*' -delete && \
-  find . -maxdepth 1 -name 'Model-*.md' ! -name 'Archive-*' -delete && \
+  find . -maxdepth 1 -name 'Model-*.md'    ! -name 'Archive-*' -delete && \
   rm -f Home.md All-Languages.md All-Models.md && \
   cp ../wiki/*.md .
 ```
 
-The `! -name 'Archive-*'` exclusion preserves the v1 archive that lives at
+The `! -name 'Archive-*'` exclusion preserves the v1 archive at
 `Archive-Home.md`, `Archive-Language-*.md`, etc.
 
 ---
 
-## Step 6 — Commit and push to the wiki repo
+## Step 6 — Commit and push
 
 ```
 cd .wiki_repo_archive && git add -A && git status --porcelain
 ```
 
-If the porcelain output is empty, the wiki is already up to date. Tell the
-user "no changes" and skip the push.
+If empty → wiki is already up to date. Tell the user "no changes" and skip.
 
-Otherwise commit and push:
+Otherwise:
 
 ```
-git commit -m "Publish v2 benchmark wiki: <N> models, <Q> languages" && git push
+git commit -m "Publish v2 benchmark wiki: <N> models, <Q> languages (judge: <judge-id>)" && git push
 ```
 
-Replace `<N>` and `<Q>` with the actual values from Step 3's stats.
+Replace `<N>`, `<Q>` from Step 3's stats and `<judge-id>` with the active
+judge.
 
-If the push fails:
-- **403/permission denied** → the user needs to authenticate. Tell them to
-  ensure `git push` works from this clone interactively, or to set up a
-  credential helper.
-- **non-fast-forward** → someone else pushed to the wiki between Step 5 and
-  now. Re-run from Step 5.
+If push fails: 403 → auth issue (configure credential helper); non-fast-forward
+→ someone else pushed, redo from Step 5.
 
 ---
 
-## Step 7 — Cleanup local artefacts
-
-From the repo root:
+## Step 7 — Cleanup
 
 ```
 rm -rf wiki/ benchmark_results/aggregated.json
 ```
 
-Don't `rm -rf .wiki_repo_archive` — Windows sometimes refuses while the
-shell still references it. Leave it; it's gitignored and will be
-overwritten next time.
+Don't `rm -rf .wiki_repo_archive` — Windows often refuses while the shell
+still references it. Leave it; it's gitignored.
 
 ---
 
@@ -156,21 +161,15 @@ overwritten next time.
 Tell the user:
 
 - The number of models and languages now live on the wiki.
-- Whether `Conflicts >= 2 obs` was non-zero (means median aggregation
-  kicked in for some triples).
+- The active `judge-id` used.
+- Whether `unjudged > 0` (some translations not in the judgment file).
 - The wiki URL (derive from origin: `<origin-url-without-.git>/wiki`).
-- A reminder, if `WIKI_PUSH_TOKEN` isn't set in the repo secrets, that
-  configuring it would automate this step in CI.
 
 ---
 
 ## Important guardrails
 
 - **Never delete `Archive-*` files.** The v1 archive is kept indefinitely.
-  All cleanup globs in this skill are written to exclude `Archive-*`.
-- **Never push to the wiki without `git status --porcelain`** confirming
-  there are changes. Empty commits pollute the wiki history.
-- **Never run from a feature branch** unless explicitly authorized — the
-  wiki should always reflect `main`.
-- **Don't hardcode model counts in commit messages** — read them from the
-  aggregator output.
+- **Never push without `git status --porcelain`** confirming changes.
+- **Never run from a feature branch** unless explicitly authorized.
+- **Hash mismatches are fatal.** If the aggregator reports any, stop and ask.

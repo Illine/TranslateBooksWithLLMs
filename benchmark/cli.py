@@ -28,13 +28,15 @@ for _stream_name in ("stdout", "stderr"):
         except Exception:
             pass
 
-from benchmark.aggregator import CLOUD_PROVIDERS, SubmissionAggregator
+from benchmark.aggregator import CLOUD_PROVIDERS, BenchmarkAggregator
 from benchmark.config import BenchmarkConfig, DEFAULT_EVALUATOR_MODEL, DEFAULT_EVALUATOR_PROVIDER, DEFAULT_POE_EVALUATOR_MODEL
 from benchmark.models import (
     BenchmarkRun,
     EvaluationScores,
-    Submission,
-    SubmissionResult,
+    JudgmentScore,
+    JudgmentsFile,
+    TranslationEntry,
+    TranslationsFile,
 )
 from benchmark.runner import BenchmarkRunner, quick_benchmark, full_benchmark
 from benchmark.results.storage import ResultsStorage
@@ -721,7 +723,7 @@ def cmd_wiki_publish(args: argparse.Namespace) -> int:
         return 1
 
 
-_SUBMISSION_SCHEMA_VERSION = "1.0"
+_SCHEMA_VERSION_V2 = "2.0"
 _GITHUB_LOGIN_RE = re.compile(r"^github:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})$")
 
 
@@ -754,133 +756,99 @@ def _detect_tbl_version() -> str:
     return "dev"
 
 
-def _validate_submission_schema(submission_dict: dict) -> list[str]:
-    """Validate against the JSON schema. Returns [] on success, [errors] on failure.
-
-    Returns a single warning entry instead of failing if `jsonschema` is missing.
-    """
-    schema_path = Path(__file__).parent / "schemas" / "submission.schema.json"
+def _validate_against_schema(doc: dict, schema_name: str) -> list[str]:
+    """Validate `doc` against `benchmark/schemas/<schema_name>`. Returns [] on success."""
+    schema_path = Path(__file__).parent / "schemas" / schema_name
     if not schema_path.exists():
         return [f"Schema file not found: {schema_path}"]
-
     try:
         import jsonschema
     except ImportError:
         return ["WARN: jsonschema not installed; skipping schema validation. Install with `pip install jsonschema`."]
-
     with schema_path.open("r", encoding="utf-8") as f:
         schema = json.load(f)
-
     validator = jsonschema.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(submission_dict), key=lambda e: e.path)
+    errors = sorted(validator.iter_errors(doc), key=lambda e: e.path)
     return [f"{'/'.join(str(p) for p in err.path) or '<root>'}: {err.message}" for err in errors]
 
 
-def _build_submission_from_run(
-    run: BenchmarkRun,
-    submitted_by: str,
-    *,
-    provider: str,
-    judge_id: str,
-    tbl_version: str,
-    prompt_version: str,
-    notes: Optional[str] = None,
-    judge_temperature: Optional[float] = None,
-    judge_seed: Optional[int] = None,
-    source_lang_default: str = "en",
-) -> tuple[Submission, str]:
-    """
-    Convert an existing BenchmarkRun into a Submission, computing output hashes.
+def _extract_translations_from_run(run: BenchmarkRun, source_lang_default: str) -> tuple[str, list[TranslationEntry]]:
+    """Extract translation entries from a BenchmarkRun. Returns (model_id, entries).
 
-    Returns (submission, single_model_id). `single_model_id` is the dominant
-    model — submissions in this layout cover one model at a time.
+    Assumes a single model per run (typical for benchmark v2). If multiple
+    models present, picks the most-frequent and warns.
     """
     if not run.results:
-        raise ValueError(f"Run {run.run_id} has no results to submit.")
-
-    # The submission schema covers a single model. Pick the most-used model
-    # in the run and warn if there are others.
+        raise ValueError(f"Run {run.run_id} has no results.")
     model_counts: dict[str, int] = {}
     for r in run.results:
         model_counts[r.model] = model_counts.get(r.model, 0) + 1
-    primary_model = max(model_counts.items(), key=lambda kv: kv[1])[0]
-
-    sub_results: list[SubmissionResult] = []
-    skipped_other_models = 0
-    skipped_no_scores = 0
-    skipped_failed = 0
-
+    primary = max(model_counts.items(), key=lambda kv: kv[1])[0]
+    if len(model_counts) > 1:
+        log_callback("warning",
+                     f"Run has multiple models {list(model_counts)}; keeping only '{primary}'.")
+    entries: list[TranslationEntry] = []
+    seen: set[tuple[str, str]] = set()
     for r in run.results:
-        if r.model != primary_model:
-            skipped_other_models += 1
+        if r.model != primary or not r.success:
             continue
-        if not r.success:
-            skipped_failed += 1
+        key = (r.source_text_id, r.target_language)
+        if key in seen:
             continue
-        if r.scores is None:
-            skipped_no_scores += 1
-            continue
-
-        sub_results.append(SubmissionResult(
+        seen.add(key)
+        entries.append(TranslationEntry(
             text_id=r.source_text_id,
             source_lang=source_lang_default,
             target_lang=r.target_language,
             output=r.translated_text,
             output_hash=_sha256_text(r.translated_text),
             translation_latency_ms=int(r.translation_time_ms or 0),
-            scores=EvaluationScores(
-                accuracy=float(r.scores.accuracy),
-                fluency=float(r.scores.fluency),
-                style=float(r.scores.style),
-                overall=float(r.scores.overall),
-                feedback=r.scores.feedback,
-            ),
+            produced_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         ))
+    return primary, entries
 
-    if not sub_results:
-        raise ValueError(
-            f"No usable results in run {run.run_id} for model {primary_model}."
-        )
 
-    if skipped_other_models:
-        log_callback(
-            "warning",
-            f"Skipped {skipped_other_models} results for non-primary models. "
-            "Run `submit` once per model.",
+def _merge_translations(existing: Optional[TranslationsFile],
+                        model_id: str, provider: str,
+                        tbl_version: str, prompt_version: str,
+                        contributor: dict,
+                        new_entries: list[TranslationEntry]) -> TranslationsFile:
+    """Merge new entries into an existing TranslationsFile (or create a fresh one)."""
+    if existing is None:
+        return TranslationsFile(
+            schema_version=_SCHEMA_VERSION_V2,
+            model_provider=provider,
+            model_id=model_id,
+            tbl_version=tbl_version,
+            prompt_version=prompt_version,
+            contributors=[contributor],
+            translations=new_entries,
         )
-    if skipped_failed or skipped_no_scores:
-        log_callback(
-            "warning",
-            f"Skipped {skipped_failed} failed and {skipped_no_scores} unscored results.",
-        )
-
-    submission = Submission(
-        schema_version=_SUBMISSION_SCHEMA_VERSION,
-        submitted_by=submitted_by,
-        submitted_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        notes=notes,
-        tbl_version=tbl_version,
-        prompt_version=prompt_version,
-        judge_id=judge_id,
-        judge_seed=judge_seed,
-        judge_temperature=judge_temperature,
+    by_key = existing.by_key()
+    for e in new_entries:
+        by_key[e.key] = e  # newest wins
+    merged_entries = sorted(by_key.values(), key=lambda t: (t.text_id, t.target_lang))
+    contribs = list(existing.contributors)
+    if contributor not in contribs:
+        contribs.append(contributor)
+    return TranslationsFile(
+        schema_version=_SCHEMA_VERSION_V2,
         model_provider=provider,
-        model_id=primary_model,
-        results=sub_results,
+        model_id=model_id,
+        tbl_version=existing.tbl_version or tbl_version,
+        prompt_version=existing.prompt_version or prompt_version,
+        contributors=contribs,
+        translations=merged_entries,
     )
-    return submission, primary_model
 
 
-def cmd_submit(args: argparse.Namespace) -> int:
-    """Convert a benchmark run JSON into a community submission file."""
+def cmd_add_translations(args: argparse.Namespace) -> int:
+    """Add translations from a benchmark run to benchmark/data/translations/<slug>.json."""
     print_banner()
 
     submitted_by = args.by
     if not _GITHUB_LOGIN_RE.match(submitted_by):
-        log_callback(
-            "error",
-            f"--by must be 'github:<username>' (got: {submitted_by})",
-        )
+        log_callback("error", f"--by must be 'github:<username>' (got: {submitted_by})")
         return 1
 
     source_path = Path(args.input).expanduser()
@@ -889,117 +857,93 @@ def cmd_submit(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        with source_path.open("r", encoding="utf-8") as f:
-            payload = json.load(f)
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         log_callback("error", f"Failed to parse {source_path}: {exc}")
         return 1
 
-    # Accept either a raw BenchmarkRun JSON or a Submission already.
-    if "results" in payload and "submission" in payload:
-        log_callback("error", "Input already looks like a submission. Aborting.")
-        return 1
-
     run = BenchmarkRun.from_dict(payload)
-
-    config = BenchmarkConfig()
-    output_dir = Path(args.output).expanduser() if args.output else config.paths.base_dir / "data" / "submissions"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    judge_id = args.judge_id or run.evaluator_model or "unknown"
+    provider = args.provider
     tbl_version = args.tbl_version or _detect_tbl_version()
     prompt_version = args.prompt_version or "v1"
-    provider = args.provider
-
-    if provider not in CLOUD_PROVIDERS and provider != "ollama":
-        log_callback("warning", f"Unknown provider '{provider}' — submission will be marked self-reported by aggregator.")
 
     try:
-        submission, primary_model = _build_submission_from_run(
-            run,
-            submitted_by=submitted_by,
-            provider=provider,
-            judge_id=judge_id,
-            tbl_version=tbl_version,
-            prompt_version=prompt_version,
-            notes=args.notes,
-            judge_temperature=args.judge_temperature,
-            judge_seed=args.judge_seed,
-            source_lang_default=args.source_lang,
-        )
+        model_id, new_entries = _extract_translations_from_run(run, args.source_lang)
     except ValueError as exc:
         log_callback("error", str(exc))
         return 1
 
-    # Validate against the JSON schema before writing.
-    submission_dict = submission.to_dict()
-    validation_errors = _validate_submission_schema(submission_dict)
-    if validation_errors and not validation_errors[0].startswith("WARN:"):
-        log_callback("error", "Submission failed schema validation:")
-        for err in validation_errors[:10]:
+    if not new_entries:
+        log_callback("error", f"No valid translations in run {run.run_id}.")
+        return 1
+
+    config = BenchmarkConfig()
+    translations_dir = Path(args.output).expanduser() if args.output else config.paths.base_dir / "data" / "translations"
+    translations_dir.mkdir(parents=True, exist_ok=True)
+    slug = _slugify_for_filename(model_id)
+    out_path = translations_dir / f"{slug}.json"
+
+    existing: Optional[TranslationsFile] = None
+    if out_path.exists():
+        try:
+            existing = TranslationsFile.from_dict(json.loads(out_path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, KeyError) as exc:
+            log_callback("error", f"Failed to load existing {out_path}: {exc}")
+            return 1
+
+    contributor = {"by": submitted_by, "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if args.notes:
+        contributor["notes"] = args.notes
+
+    merged = _merge_translations(existing, model_id, provider, tbl_version, prompt_version,
+                                 contributor, new_entries)
+    doc = merged.to_dict()
+
+    errors = _validate_against_schema(doc, "translations.schema.json")
+    if errors and not errors[0].startswith("WARN:"):
+        log_callback("error", "Translations failed schema validation:")
+        for err in errors[:10]:
             print(f"  - {err}")
         return 1
-    elif validation_errors:
-        log_callback("warning", validation_errors[0])
+    elif errors:
+        log_callback("warning", errors[0])
 
-    # Compose filename: <date>_<username>_<model-slug>.json
-    date_part = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    user_part = submitted_by.split(":", 1)[1]
-    model_slug = _slugify_for_filename(primary_model)
-    filename = f"{date_part}_{user_part}_{model_slug}.json"
-    output_path = output_dir / filename
+    tmp = out_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(out_path)
 
-    with output_path.open("w", encoding="utf-8") as f:
-        f.write(submission.to_json())
-
-    print(colored(f"\nSubmission written: {output_path}", Colors.GREEN))
-    print(colored(f"  Model:    {primary_model} ({provider})", Colors.CYAN))
-    print(colored(f"  Results:  {len(submission.results)}", Colors.CYAN))
-    print(colored(f"  Judge:    {judge_id}", Colors.CYAN))
-    print()
-    print(colored("Next steps to open a Pull Request:", Colors.BOLD))
-    branch = f"submit/{model_slug}"
-    rel_path = output_path.relative_to(Path.cwd()) if output_path.is_absolute() else output_path
-    print(f"  git checkout -b {branch}")
-    print(f"  git add {rel_path}")
-    print(f"  git commit -s -m \"submit: {primary_model} benchmark results\"")
-    print(f"  gh pr create --title \"Submit {primary_model} benchmark results\" --body \"by {submitted_by}\"")
+    print(colored(f"\nTranslations written: {out_path}", Colors.GREEN))
+    print(colored(f"  Model:        {model_id} ({provider})", Colors.CYAN))
+    print(colored(f"  Added/merged: {len(new_entries)} entries", Colors.CYAN))
+    print(colored(f"  Total now:    {len(merged.translations)}", Colors.CYAN))
     return 0
 
 
-def cmd_aggregate_submissions(args: argparse.Namespace) -> int:
-    """Aggregate all submissions into a synthetic BenchmarkRun JSON."""
+def cmd_aggregate(args: argparse.Namespace) -> int:
+    """Build a BenchmarkRun by joining translations/ + judgments/ (split layout)."""
     print_banner()
 
     config = BenchmarkConfig()
-    submissions_dir = (
-        Path(args.submissions_dir).expanduser()
-        if args.submissions_dir
-        else config.paths.base_dir / "data" / "submissions"
-    )
+    translations_dir = Path(args.translations_dir).expanduser() if args.translations_dir else \
+        config.paths.base_dir / "data" / "translations"
+    judgments_dir = Path(args.judgments_dir).expanduser() if args.judgments_dir else \
+        config.paths.base_dir / "data" / "judgments"
 
-    aggregator = SubmissionAggregator(submissions_dir)
-    submissions = aggregator.load()
-    if not submissions:
-        log_callback("warning", f"No submissions found in {submissions_dir}.")
-        return 0 if args.allow_empty else 1
+    aggregator = BenchmarkAggregator(translations_dir, judgments_dir, active_judge_id=args.judge_id)
+    try:
+        run = aggregator.aggregate(run_id=args.run_id)
+    except RuntimeError as exc:
+        log_callback("error", str(exc))
+        return 1
 
-    run = aggregator.aggregate(submissions, run_id=args.run_id or "aggregated")
-
-    output_path = (
-        Path(args.output).expanduser()
-        if args.output
-        else config.paths.results_dir / f"{run.run_id}.json"
-    )
+    output_path = Path(args.output).expanduser() if args.output else config.paths.results_dir / f"{run.run_id}.json"
     aggregator.write_run(run, output_path)
 
     print(colored(f"\nAggregated run written: {output_path}", Colors.GREEN))
-    print(f"  Submissions:       {aggregator.stats.n_submissions}")
-    print(f"  Raw results:       {aggregator.stats.n_results_in}")
-    print(f"  Aggregated results:{aggregator.stats.n_results_out}")
-    print(f"  Conflicts (>=2 obs): {aggregator.stats.n_conflicts}")
-    print(f"  Models:            {len(run.models)}")
-    print(f"  Languages:         {len(run.languages)}")
+    aggregator.print_stats()
+    print(f"  Models:    {len(run.models)}")
+    print(f"  Languages: {len(run.languages)}")
+    print(f"  Judge:     {aggregator.active_judge_id}")
     return 0
 
 
@@ -1262,72 +1206,66 @@ Examples:
     )
     export_parser.set_defaults(func=cmd_export)
 
-    # Submit command
-    submit_parser = subparsers.add_parser(
-        "submit",
-        help="Convert a benchmark run JSON into a community submission file",
+    # add-translations command (split-layout v2)
+    add_t_parser = subparsers.add_parser(
+        "add-translations",
+        help="Add translations from a benchmark run to benchmark/data/translations/<slug>.json",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "input",
-        help="Path to the benchmark run JSON to convert (e.g. benchmark_results/<run_id>.json)",
+        help="Path to the benchmark run JSON (e.g. benchmark_results/<run_id>.json)",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--by",
         required=True,
         help="GitHub identity, e.g. github:hydropix",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--provider",
         required=True,
         choices=sorted(CLOUD_PROVIDERS | {"ollama"}),
         help="Provider used to produce the translations.",
     )
-    submit_parser.add_argument(
-        "--judge-id",
-        help="Judge model ID (defaults to the run's evaluator_model field).",
-    )
-    submit_parser.add_argument(
-        "--judge-seed",
-        type=int,
-        help="Seed used by the judge, if any.",
-    )
-    submit_parser.add_argument(
-        "--judge-temperature",
-        type=float,
-        help="Temperature used by the judge, if any.",
-    )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--tbl-version",
         help="TBL version label (defaults to git short SHA or 'dev').",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--prompt-version",
         default="v1",
         help="Prompt version label.",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--source-lang",
         default="en",
         help="Source language code for the texts (default: en).",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "--notes",
-        help="Optional free-text notes attached to the submission (<=2000 chars).",
+        help="Optional free-text notes attached to the contributor entry (<=2000 chars).",
     )
-    submit_parser.add_argument(
+    add_t_parser.add_argument(
         "-o", "--output",
-        help="Destination directory (default: benchmark/data/submissions/).",
+        help="Destination directory (default: benchmark/data/translations/).",
     )
-    submit_parser.set_defaults(func=cmd_submit)
+    add_t_parser.set_defaults(func=cmd_add_translations)
 
-    # Aggregate-submissions command
+    # aggregate command (split-layout v2)
     aggregate_parser = subparsers.add_parser(
-        "aggregate-submissions",
-        help="Merge all benchmark/data/submissions/*.json into a single run JSON",
+        "aggregate",
+        help="Join translations/ + judgments/ into a BenchmarkRun JSON for the wiki",
     )
     aggregate_parser.add_argument(
-        "--submissions-dir",
-        help="Where to read submissions from (default: benchmark/data/submissions).",
+        "--translations-dir",
+        help="Where to read translations/ (default: benchmark/data/translations).",
+    )
+    aggregate_parser.add_argument(
+        "--judgments-dir",
+        help="Where to read judgments/ (default: benchmark/data/judgments).",
+    )
+    aggregate_parser.add_argument(
+        "--judge-id",
+        help="Active judge id to display. Required if multiple judges present.",
     )
     aggregate_parser.add_argument(
         "--output",
@@ -1335,14 +1273,9 @@ Examples:
     )
     aggregate_parser.add_argument(
         "--run-id",
-        help="Run ID for the aggregated run (default: 'aggregated').",
+        help="Run ID for the aggregated run (default: aggregated_<UTC>).",
     )
-    aggregate_parser.add_argument(
-        "--allow-empty",
-        action="store_true",
-        help="Exit 0 instead of 1 when no submissions are found.",
-    )
-    aggregate_parser.set_defaults(func=cmd_aggregate_submissions)
+    aggregate_parser.set_defaults(func=cmd_aggregate)
 
     # Delete command
     delete_parser = subparsers.add_parser("delete", help="Delete a benchmark run")

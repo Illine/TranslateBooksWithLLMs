@@ -1,18 +1,20 @@
 """
-Aggregate community-submitted benchmark results.
+Aggregate translations + judgments from the v2 split layout into a BenchmarkRun.
 
-Reads all `*.json` files from `benchmark/data/submissions/` (after they've been
-validated against `submission.schema.json`) and produces a synthetic
-`BenchmarkRun` whose results carry:
+Reads:
+    benchmark/data/translations/<model-slug>.json    — TranslationsFile per model
+    benchmark/data/judgments/<judge-id>.json         — JudgmentsFile per judge
 
-- The **median** of `accuracy/fluency/style/overall` when several contributors
-  have tested the same `(model, text_id, target_lang)` triple.
-- `n_obs`: how many observations went into that median.
-- `verified`: True when all observations come from cloud providers (replayable),
-  False when at least one observation is `self_reported` (local model).
-- `contributors`: list of distinct GitHub identities that submitted that triple.
+Joins translations to judgment scores by `(model_id, text_id, target_lang)`,
+validating `output_hash` matches as an integrity check. Produces a
+`BenchmarkRun` the wiki generator can consume.
 
-The wiki generator can then consume this `BenchmarkRun` exactly like a real one.
+If a translation has no matching score from the active judge, it is included
+with `scores=None` and `error="not judged"`. The aggregator logs how many
+unjudged translations were found.
+
+Single-judge model: pass `--judge-id` (or `active_judge_id` in code). Multi-
+judge support (cross-judge comparison) is a future extension.
 """
 
 from __future__ import annotations
@@ -21,149 +23,195 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from statistics import median
-from typing import Iterable, Optional
+from typing import Optional
 
 from .models import (
     BenchmarkRun,
     EvaluationScores,
-    Submission,
+    JudgmentsFile,
     TranslationResult,
+    TranslationsFile,
 )
 
 
-# Cloud providers whose results are replayable in CI. Anything outside this set
-# is treated as "self-reported".
 CLOUD_PROVIDERS = {"openai", "openrouter", "gemini", "mistral", "deepseek", "poe", "nim"}
 
 
 @dataclass
 class AggregationStats:
-    n_submissions: int = 0
-    n_results_in: int = 0
-    n_results_out: int = 0
-    n_conflicts: int = 0  # how many keys had >1 observation
+    n_translation_files: int = 0
+    n_translations: int = 0
+    n_judgment_files: int = 0
+    n_scores: int = 0
+    n_matched: int = 0
+    n_unjudged: int = 0
+    n_hash_mismatches: int = 0
+    n_orphan_scores: int = 0  # scores whose translation is not present
 
 
-class SubmissionAggregator:
-    """Merge per-contributor submissions into a single BenchmarkRun."""
+class BenchmarkAggregator:
+    """Join translations/ + judgments/ → BenchmarkRun for wiki generation."""
 
-    def __init__(self, submissions_dir: Path):
-        self.submissions_dir = submissions_dir
+    def __init__(
+        self,
+        translations_dir: Path,
+        judgments_dir: Path,
+        active_judge_id: Optional[str] = None,
+    ):
+        self.translations_dir = translations_dir
+        self.judgments_dir = judgments_dir
+        self.active_judge_id = active_judge_id
         self.stats = AggregationStats()
 
-    def discover(self) -> list[Path]:
-        if not self.submissions_dir.is_dir():
-            return []
-        return sorted(p for p in self.submissions_dir.glob("*.json") if p.is_file())
+    # ─── loading ──────────────────────────────────────────────────────────
 
-    def load(self) -> list[Submission]:
-        submissions: list[Submission] = []
-        for path in self.discover():
+    def load_translations(self) -> dict[str, TranslationsFile]:
+        """{model_id: TranslationsFile}"""
+        if not self.translations_dir.is_dir():
+            return {}
+        out: dict[str, TranslationsFile] = {}
+        for path in sorted(self.translations_dir.glob("*.json")):
             try:
-                with path.open("r", encoding="utf-8") as f:
-                    data = json.load(f)
-                submissions.append(Submission.from_dict(data))
+                data = json.loads(path.read_text(encoding="utf-8"))
+                tf = TranslationsFile.from_dict(data)
             except (OSError, json.JSONDecodeError, KeyError) as exc:
-                raise RuntimeError(f"Failed to load submission {path}: {exc}") from exc
-        self.stats.n_submissions = len(submissions)
-        return submissions
+                raise RuntimeError(f"Failed to load translations {path}: {exc}") from exc
+            out[tf.model_id] = tf
+            self.stats.n_translations += len(tf.translations)
+        self.stats.n_translation_files = len(out)
+        return out
 
-    def aggregate(
-        self,
-        submissions: Optional[Iterable[Submission]] = None,
-        run_id: Optional[str] = None,
-    ) -> BenchmarkRun:
-        if submissions is None:
-            submissions = self.load()
-        submissions = list(submissions)
+    def load_judgments(self) -> dict[str, JudgmentsFile]:
+        """{judge_id: JudgmentsFile}"""
+        if not self.judgments_dir.is_dir():
+            return {}
+        out: dict[str, JudgmentsFile] = {}
+        for path in sorted(self.judgments_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                jf = JudgmentsFile.from_dict(data)
+            except (OSError, json.JSONDecodeError, KeyError) as exc:
+                raise RuntimeError(f"Failed to load judgments {path}: {exc}") from exc
+            out[jf.judge_id] = jf
+            self.stats.n_scores += len(jf.scores)
+        self.stats.n_judgment_files = len(out)
+        return out
 
-        # Bucket observations by (model_id, text_id, target_lang).
-        buckets: dict[tuple[str, str, str], list[dict]] = {}
-        models: set[str] = set()
-        languages: set[str] = set()
-        judges: set[str] = set()
+    # ─── aggregation ──────────────────────────────────────────────────────
 
-        for sub in submissions:
-            models.add(sub.model_id)
-            judges.add(sub.judge_id)
-            verified = sub.model_provider in CLOUD_PROVIDERS
+    def aggregate(self, run_id: Optional[str] = None) -> BenchmarkRun:
+        translations = self.load_translations()
+        judgments = self.load_judgments()
 
-            for r in sub.results:
-                key = (sub.model_id, r.text_id, r.target_lang)
-                self.stats.n_results_in += 1
-                languages.add(r.target_lang)
-                buckets.setdefault(key, []).append({
-                    "submission": sub,
-                    "result": r,
-                    "verified": verified,
-                })
-
-        # Reduce each bucket to a single TranslationResult with median scores.
-        merged: list[TranslationResult] = []
-
-        for key, observations in buckets.items():
-            model_id, text_id, target_lang = key
-
-            if len(observations) > 1:
-                self.stats.n_conflicts += 1
-
-            accs = [o["result"].scores.accuracy for o in observations]
-            flus = [o["result"].scores.fluency for o in observations]
-            stys = [o["result"].scores.style for o in observations]
-            ovrs = [o["result"].scores.overall for o in observations]
-
-            # Pick the output text from the observation closest to the median
-            # overall score, so the example shown is representative.
-            target_overall = median(ovrs)
-            representative = min(
-                observations,
-                key=lambda o: abs(o["result"].scores.overall - target_overall),
-            )
-            rep_result = representative["result"]
-            rep_sub = representative["submission"]
-
-            scores = EvaluationScores(
-                accuracy=median(accs),
-                fluency=median(flus),
-                style=median(stys),
-                overall=target_overall,
-                feedback=rep_result.scores.feedback,
+        if not translations:
+            raise RuntimeError(
+                f"No translation files in {self.translations_dir}. "
+                "Run scripts/migrate_to_split_layout.py first?"
             )
 
-            merged.append(TranslationResult(
-                source_text_id=text_id,
-                target_language=target_lang,
-                model=model_id,
-                translated_text=rep_result.output,
-                scores=scores,
-                translation_time_ms=int(rep_result.translation_latency_ms or 0),
-                evaluation_time_ms=0,
-                timestamp=rep_sub.submitted_at or datetime.now(timezone.utc).isoformat(),
-                error=None,
-                n_obs=len(observations),
-                verified=all(o["verified"] for o in observations),
-                contributors=sorted({o["submission"].submitted_by for o in observations}),
-            ))
+        # Resolve active judge
+        if self.active_judge_id is None:
+            if len(judgments) == 1:
+                self.active_judge_id = next(iter(judgments))
+            elif len(judgments) == 0:
+                # No scores yet — emit translations with null scores
+                self.active_judge_id = "(no-judge)"
+            else:
+                raise RuntimeError(
+                    f"Multiple judges available ({list(judgments)}); pass active_judge_id explicitly."
+                )
 
-        self.stats.n_results_out = len(merged)
+        active_judge = judgments.get(self.active_judge_id)
+        scores_by_key: dict[tuple[str, str, str], object] = (
+            active_judge.by_key() if active_judge else {}
+        )
 
-        # Pick the most-used judge as the run's evaluator label.
-        judge_label = ", ".join(sorted(judges)) if judges else ""
+        results: list[TranslationResult] = []
+        models_seen: set[str] = set()
+        languages_seen: set[str] = set()
+
+        for mid, tf in translations.items():
+            verified = tf.model_provider in CLOUD_PROVIDERS
+            contributors = sorted({c["by"] for c in tf.contributors})
+            for t in tf.translations:
+                models_seen.add(mid)
+                languages_seen.add(t.target_lang)
+                key = (mid, t.text_id, t.target_lang)
+                score = scores_by_key.get(key)
+                scores_obj: Optional[EvaluationScores] = None
+                error: Optional[str] = None
+                if score is not None:
+                    if score.output_hash != t.output_hash:
+                        self.stats.n_hash_mismatches += 1
+                        error = (
+                            f"hash mismatch: translation={t.output_hash[:16]} "
+                            f"score={score.output_hash[:16]}"
+                        )
+                    else:
+                        scores_obj = EvaluationScores(
+                            accuracy=score.accuracy,
+                            fluency=score.fluency,
+                            style=score.style,
+                            overall=score.overall,
+                            feedback=score.feedback,
+                        )
+                        self.stats.n_matched += 1
+                else:
+                    self.stats.n_unjudged += 1
+                    error = "not judged"
+
+                results.append(TranslationResult(
+                    source_text_id=t.text_id,
+                    target_language=t.target_lang,
+                    model=mid,
+                    translated_text=t.output,
+                    scores=scores_obj,
+                    translation_time_ms=t.translation_latency_ms,
+                    evaluation_time_ms=(score.evaluation_time_ms if score else 0),
+                    timestamp=t.produced_at or "",
+                    error=error,
+                    n_obs=1,
+                    verified=verified,
+                    contributors=contributors,
+                ))
+
+        # Count orphan scores (scored but no translation)
+        if active_judge is not None:
+            translation_keys = {
+                (mid, t.text_id, t.target_lang)
+                for mid, tf in translations.items()
+                for t in tf.translations
+            }
+            for s in active_judge.scores:
+                if s.key not in translation_keys:
+                    self.stats.n_orphan_scores += 1
 
         run = BenchmarkRun(
-            run_id=run_id or "aggregated",
+            run_id=run_id or f"aggregated_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
             started_at=datetime.now(timezone.utc).isoformat(),
             completed_at=datetime.now(timezone.utc).isoformat(),
-            models=sorted(models),
-            languages=sorted(languages),
-            evaluator_model=judge_label,
-            results=merged,
+            models=sorted(models_seen),
+            languages=sorted(languages_seen),
+            evaluator_model=self.active_judge_id,
+            results=results,
             status="completed",
         )
         return run
 
     def write_run(self, run: BenchmarkRun, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as f:
-            f.write(run.to_json())
+        output_path.write_text(run.to_json(), encoding="utf-8")
+
+    def print_stats(self) -> None:
+        s = self.stats
+        print(f"Aggregation:")
+        print(f"  translation files: {s.n_translation_files}")
+        print(f"  translations:      {s.n_translations}")
+        print(f"  judgment files:    {s.n_judgment_files}")
+        print(f"  scores:            {s.n_scores}")
+        print(f"  matched:           {s.n_matched}")
+        print(f"  unjudged:          {s.n_unjudged}")
+        if s.n_hash_mismatches:
+            print(f"  HASH MISMATCHES:   {s.n_hash_mismatches}  ← integrity error")
+        if s.n_orphan_scores:
+            print(f"  orphan scores:     {s.n_orphan_scores}  (judged but translation missing)")

@@ -1,169 +1,217 @@
 # Contributing benchmark results
 
-The TranslateBookWithLLM benchmark is **community-driven**. You can contribute
-results for any model the project doesn't already track by opening a Pull
-Request that adds a single JSON file under
-[`benchmark/data/submissions/`](../benchmark/data/submissions/).
+The TranslateBookWithLLM benchmark v2 is **community-driven**. You can
+contribute results for any model the project doesn't already track by
+opening a Pull Request that adds your translations to the split layout.
 
-A GitHub Action validates every PR against the schema and replays a sample of
-the results (when the model is replayable from CI). On merge, the wiki is
-regenerated automatically.
+**Two-file split layout:**
 
-This page walks you through the full workflow. Submitting a model takes ~30
-minutes, almost all of it spent waiting for translation/evaluation calls.
+- `benchmark/data/translations/<model-slug>.json` — your model's outputs
+  (immutable artifact, no scores)
+- `benchmark/data/judgments/claude-opus-4-7-rubric-v2-poe.json` — single
+  canonical judgment file under rubric v2
+
+A GitHub Action validates every PR against both schemas. On merge, the wiki
+is regenerated automatically.
 
 ---
 
-## 1. Run the benchmark locally
+## 1. Run the benchmark locally (translations only)
 
-Prereq: a working Python 3.11+ env with this repo installed (`pip install -r requirements.txt`).
+Prereq: a working Python 3.11+ env with this repo installed
+(`pip install -r requirements.txt`).
 
-Pick the provider that matches your model and run the benchmark CLI. Examples:
+Run the CLI with `--no-evaluate` — under v2, **scoring is centralized**:
 
 ```bash
 # Cloud (replayable in CI):
 python -m benchmark.cli run \
   --provider openrouter \
   --openrouter-key $OPENROUTER_API_KEY \
-  -m anthropic/claude-haiku-4-5
+  -m anthropic/claude-haiku-4-5 \
+  --no-evaluate \
+  --pair-set quick
 
-# Local Ollama (will be marked self-reported):
+# Local Ollama:
 python -m benchmark.cli run \
   --provider ollama \
-  -m qwen3:14b
-
-# Specific languages:
-python -m benchmark.cli run -p openrouter -m google/gemini-3-flash-preview \
-  -l fr de ja zh-Hans
+  -m qwen3:14b \
+  --no-evaluate \
+  --pair-set quick
 ```
 
-The run is saved to `benchmark_results/<run_id>.json`.
+The run is saved to `benchmark_results/<run_id>.json` with translations and
+no scores.
 
-> **Tip:** start with a small language subset (`-l fr de ja`) to confirm your
-> setup works before launching a long full run.
+Pair sets:
+- `quick`    — 8 canonical pairs (~45 translations)
+- `standard` — 16 pairs (~125 translations)
+- `full`     — 28 pairs (~245 translations)
 
 ---
 
-## 2. Convert the run into a submission
+## 2. Add translations to the split layout
 
 ```bash
-python -m benchmark.cli submit benchmark_results/<run_id>.json \
+python -m benchmark.cli add-translations benchmark_results/<run_id>.json \
   --by github:<your-username> \
-  --provider openrouter \
-  --judge-id google/gemini-3-flash-preview
+  --provider openrouter
 ```
 
-This writes a validated submission file to
-`benchmark/data/submissions/<date>_<username>_<model-slug>.json` and prints the
-git commands you need next.
+This writes/merges into
+`benchmark/data/translations/<model-slug>.json`, computing `output_hash` and
+validating against
+[`benchmark/schemas/translations.schema.json`](../benchmark/schemas/translations.schema.json).
 
-The CLI computes `output_hash` for each translation, fills in metadata
-(`tbl_version`, `prompt_version`, `judge_id`, …), and validates the JSON
-against [`benchmark/schemas/submission.schema.json`](../benchmark/schemas/submission.schema.json)
-locally before writing the file.
+If the model already has a translations file, your entries are merged in
+(most-recent wins on `(text_id, target_lang)` conflicts). Your GitHub
+identity is appended to the `contributors` list.
 
 ---
 
-## 3. Open a Pull Request
+## 3. Re-judge the new entries
+
+The canonical judge is Opus 4.7 via Poe under
+[rubric v2](JUDGE_RUBRIC_V2.md). You need a `POE_API_KEY` in your `.env`.
+
+```bash
+python scripts/rejudge_all_via_poe.py
+```
+
+The script is idempotent: it loads existing scores from
+`benchmark/data/judgments/claude-opus-4-7-rubric-v2-poe.json` and only
+judges new entries. Expected cost: ~$0.007 per new translation.
+
+---
+
+## 4. Open a Pull Request
 
 ```bash
 git checkout -b submit/<model-slug>
-git add benchmark/data/submissions/<date>_<username>_<model-slug>.json
-git commit -s -m "submit: <model-id> benchmark results"
-gh pr create --title "Submit <model-id> benchmark results"
+git add benchmark/data/translations/<model-slug>.json \
+        benchmark/data/judgments/claude-opus-4-7-rubric-v2-poe.json
+git commit -s -m "benchmark: add <model-id> (judge: Opus 4.7 rubric v2)"
+gh pr create --title "Benchmark: add <model-id>"
 ```
 
-The `Validate Benchmark Submission` workflow will:
+The validation workflow runs:
 
-1. Run schema validation on every changed submission file.
-2. Sample ~10% of results and **replay** them: re-translate with the same
-   provider/model and re-evaluate; flag results whose chrF vs. the submitted
-   output is < 0.85 **and** whose overall score differs by more than 1 point.
-3. For local models (Ollama), do cheap sanity checks instead: detect output
-   language, check length plausibility. The submission is then marked
-   `self-reported` in the wiki.
-4. Post a Markdown report on the PR.
+1. JSON schema validation on both files.
+2. For cloud-provider models, optional re-translation replay (sample
+   ~10%) to detect drift.
+3. Markdown report posted to the PR.
 
-Address any reported issues by force-pushing a corrected file.
+Address any issues by force-pushing a corrected commit.
 
 ---
 
-## 4. After merge
+## 5. After merge
 
-The `Publish Benchmark Wiki` workflow runs on `main` whenever
-`benchmark/data/**` changes. It:
+The wiki workflow runs on `main` when `benchmark/data/**` changes:
 
-1. Aggregates all submissions (`benchmark/cli aggregate-submissions`).
-2. Conflicts on `(model, text, target_lang)` are resolved by **median** of the
-   four scores; the representative output text is the one closest to the
-   median overall score.
-3. Regenerates the wiki Markdown and pushes to the GitHub wiki repo.
+1. Joins `translations/` × `judgments/<active-judge>.json` via
+   `python -m benchmark.cli aggregate`.
+2. Joins by `(model_id, text_id, target_lang)` with `output_hash` integrity
+   check.
+3. Regenerates wiki Markdown, pushes to the GitHub wiki repo.
 
-Each row in the wiki shows the number of observations (`Obs`) and a verified /
-self-reported / mixed badge.
+Each row shows `Obs` (number of contributors) and a verified /
+self-reported badge based on provider.
 
 ---
 
 ## File format reference
 
-The full JSON schema is in
-[`benchmark/schemas/submission.schema.json`](../benchmark/schemas/submission.schema.json).
-A minimal example:
+### Translations
+
+[`benchmark/schemas/translations.schema.json`](../benchmark/schemas/translations.schema.json).
+Minimal example:
 
 ```json
 {
-  "schema_version": "1.0",
-  "submission": {
-    "submitted_by": "github:hydropix",
-    "submitted_at": "2026-05-09T10:00:00Z"
-  },
-  "environment": {
-    "tbl_version": "v0.1.0",
-    "prompt_version": "v1",
-    "judge_id": "google/gemini-3-flash-preview"
-  },
-  "model": {
-    "provider": "openrouter",
-    "id": "anthropic/claude-haiku-4-5"
-  },
-  "results": [
+  "schema_version": "2.0",
+  "model": {"provider": "openrouter", "id": "anthropic/claude-haiku-4-5"},
+  "environment": {"tbl_version": "v1.2.4", "prompt_version": "v1"},
+  "contributors": [
+    {"by": "github:hydropix", "at": "2026-05-10T16:01:28Z"}
+  ],
+  "translations": [
     {
       "text_id": "pride_prejudice",
       "source_lang": "en",
       "target_lang": "fr",
       "output": "...",
       "output_hash": "sha256:<64-hex>",
-      "scores": {
-        "accuracy": 8.5,
-        "fluency": 9.0,
-        "style": 7.5,
-        "overall": 8.3
-      }
+      "translation_latency_ms": 832,
+      "produced_at": "2026-05-10T16:01:28Z"
+    }
+  ]
+}
+```
+
+### Judgments
+
+[`benchmark/schemas/judgments.schema.json`](../benchmark/schemas/judgments.schema.json).
+Minimal example:
+
+```json
+{
+  "schema_version": "2.0",
+  "judge": {
+    "id": "claude-opus-4-7-rubric-v2-poe",
+    "model": "Claude-Opus-4.7",
+    "rubric_version": "v2",
+    "provider": "poe",
+    "temperature": 0.1,
+    "thinking": "disabled"
+  },
+  "run": {
+    "id": "rejudge_20260511T220000Z",
+    "started_at": "2026-05-11T22:00:00Z",
+    "completed_at": "2026-05-11T22:15:00Z"
+  },
+  "scores": [
+    {
+      "model_id": "anthropic/claude-haiku-4-5",
+      "text_id": "pride_prejudice",
+      "target_lang": "fr",
+      "output_hash": "sha256:<64-hex>",
+      "accuracy": 9.0,
+      "fluency": 8.5,
+      "style": 8.0,
+      "overall": 8.3,
+      "feedback": "Faithful Austen rendering; ..."
     }
   ]
 }
 ```
 
 Reference texts and language codes live in
-[`benchmark/data/`](../benchmark/data/) — pick `text_id` values from
-`benchmark/data/reference_texts/<lang>/*.yaml` and `target_lang` codes from
-`benchmark/data/languages/*.yaml`.
+[`benchmark/data/`](../benchmark/data/) — pick `text_id` from
+`reference_texts/<lang>/*.yaml` and `target_lang` from `languages/*.yaml`.
 
 ---
 
 ## FAQ
 
-**Can I submit results for a private model?**
-Yes, but it will be marked `self-reported` because CI cannot replay it.
+**Why is there only one judgments file?**
+v2 uses a single canonical judge (Opus 4.7 rubric v2 via Poe) for
+calibration stability across submissions. Multi-judge support is possible
+later but not enabled.
 
-**Two contributors tested the same `(model, text, lang)` — whose result wins?**
-Neither: the aggregator takes the median of all observations and shows the
-number of observations in the wiki.
+**Two contributors test the same `(model, text, lang)` — whose translation
+wins?**
+The most recent submission wins on output. The contributors list grows to
+record both names. Scores are taken from the canonical judge — same input
+hash → same score.
 
-**Do submissions expire when a new model version ships?**
-Not automatically. The wiki keeps historical entries; we may add a UI filter
-later.
+**Can I submit a private/local model?**
+Yes. It will be marked `self-reported` (no CI replay). The judge can still
+score it from the translation text alone.
 
-**Where do I report bugs in the schema or workflow?**
-Open an issue at
+**My model produced bad translations — can I re-run them?**
+Yes. Re-run `python -m benchmark.cli add-translations ...` with the same
+model and provider. The merge keeps the most recent entries by date.
+
+**Where to report bugs?**
 [github.com/hydropix/TranslateBookWithLLM/issues](https://github.com/hydropix/TranslateBookWithLLM/issues).
