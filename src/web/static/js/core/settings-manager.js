@@ -66,6 +66,7 @@ const LOCAL_SETTINGS = [
     'textCleanup',
     'refineTranslation',
     'bilingualMode',
+    'draftMode',
     'disableAutoPause',
     'customInstructionFile',
     'apiEndpointCustomized',  // Track if user manually changed endpoint
@@ -175,6 +176,7 @@ export const SettingsManager = {
             { id: 'textCleanup', event: 'change' },
             { id: 'refineTranslation', event: 'change' },
             { id: 'bilingualMode', event: 'change' },
+            { id: 'draftMode', event: 'change' },
             { id: 'disableAutoPause', event: 'change' },
             { id: 'customInstructionSelect', event: 'change' }
         ];
@@ -359,6 +361,12 @@ export const SettingsManager = {
                 bilingualCheckbox.checked = prefs.bilingualMode;
             }
         }
+        if (prefs.draftMode !== undefined) {
+            const draftCheckbox = DomHelpers.getElement('draftMode');
+            if (draftCheckbox) {
+                draftCheckbox.checked = prefs.draftMode;
+            }
+        }
         if (prefs.disableAutoPause !== undefined) {
             const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
             if (disableAutoPauseCheckbox) {
@@ -372,7 +380,7 @@ export const SettingsManager = {
         }
 
         // Keep Prompt Options section open if any option is active
-        const hasAnyPromptOption = prefs.textCleanup || prefs.refineTranslation || prefs.bilingualMode || prefs.disableAutoPause || prefs.customInstructionFile;
+        const hasAnyPromptOption = prefs.textCleanup || prefs.refineTranslation || prefs.bilingualMode || prefs.draftMode || prefs.disableAutoPause || prefs.customInstructionFile;
         if (hasAnyPromptOption) {
             const promptOptionsSection = DomHelpers.getElement('promptOptionsSection');
             const promptOptionsIcon = DomHelpers.getElement('promptOptionsIcon');
@@ -427,6 +435,7 @@ export const SettingsManager = {
         const textCleanupCheckbox = DomHelpers.getElement('textCleanup');
         const refineTranslationCheckbox = DomHelpers.getElement('refineTranslation');
         const bilingualModeCheckbox = DomHelpers.getElement('bilingualMode');
+        const draftModeCheckbox = DomHelpers.getElement('draftMode');
         const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
 
         const prefs = {
@@ -441,6 +450,7 @@ export const SettingsManager = {
             textCleanup: textCleanupCheckbox ? textCleanupCheckbox.checked : false,
             refineTranslation: refineTranslationCheckbox ? refineTranslationCheckbox.checked : false,
             bilingualMode: bilingualModeCheckbox ? bilingualModeCheckbox.checked : false,
+            draftMode: draftModeCheckbox ? draftModeCheckbox.checked : false,
             disableAutoPause: disableAutoPauseCheckbox ? disableAutoPauseCheckbox.checked : false,
             customInstructionFile: DomHelpers.getValue('customInstructionSelect') || ''
         };

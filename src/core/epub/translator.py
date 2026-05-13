@@ -636,10 +636,14 @@ async def _precount_chunks(
     content_files: list,
     opf_dir: str,
     max_tokens_per_chunk: int,
-    log_callback: Optional[Callable] = None
+    log_callback: Optional[Callable] = None,
+    draft_mode: bool = False,
 ) -> Tuple[int, List[int]]:
     """
     Pre-count chunks across all XHTML files for accurate progress tracking.
+
+    When draft_mode is True, counts chunks using the plain-text pipeline (paragraphs
+    joined by \\n\\n then chunked by TokenChunker) instead of the HTML-aware chunker.
 
     Returns:
         (total_chunks, chunks_per_file)
@@ -665,6 +669,12 @@ async def _precount_chunks(
 
             parser = etree.XMLParser(encoding='utf-8', recover=True, remove_blank_text=False)
             doc_root = etree.fromstring(content.encode('utf-8'), parser)
+
+            if draft_mode:
+                chunk_count = _precount_chunks_draft(doc_root, max_tokens_per_chunk)
+                chunks_per_file.append(chunk_count)
+                total_chunks += chunk_count
+                continue
 
             # Count chunks using adapter
             adapter = EpubTranslationAdapter()
@@ -694,6 +704,39 @@ async def _precount_chunks(
                      f"📊 Found {total_chunks} total chunks across {len(content_files)} files")
 
     return total_chunks, chunks_per_file
+
+
+def _precount_chunks_draft(doc_root, max_tokens_per_chunk: int) -> int:
+    """
+    Count chunks for one XHTML file using the draft-mode pipeline.
+    Returns 0 on any failure (matches the normal-path behavior).
+    """
+    try:
+        from .plain_extractor import extract_plain_paragraphs
+        from src.core.text_processor import split_text_into_chunks
+        from src.core.common.plain_text_pipeline import PARAGRAPH_SEPARATOR
+
+        body = doc_root.find('.//{http://www.w3.org/1999/xhtml}body')
+        if body is None:
+            body = doc_root.find('.//body')
+        if body is None:
+            return 0
+
+        paragraphs, _, _ = extract_plain_paragraphs(body)
+        if not paragraphs:
+            return 0
+
+        full_text = PARAGRAPH_SEPARATOR.join(p for p in paragraphs if p is not None)
+        if not full_text.strip():
+            return 0
+
+        chunks = split_text_into_chunks(
+            text=full_text,
+            max_tokens_per_chunk=max_tokens_per_chunk,
+        )
+        return len(chunks)
+    except Exception:
+        return 0
 
 
 async def _process_all_content_files(
@@ -744,8 +787,10 @@ async def _process_all_content_files(
     from .translation_metrics import TranslationMetrics
 
     # Pre-count chunks for accurate progress tracking
+    draft_mode = bool(prompt_options and prompt_options.get('draft_mode'))
     total_chunks, chunks_per_file = await _precount_chunks(
-        content_files, opf_dir, max_tokens_per_chunk, log_callback
+        content_files, opf_dir, max_tokens_per_chunk, log_callback,
+        draft_mode=draft_mode,
     )
 
     # Check if refinement is enabled - this doubles the total work

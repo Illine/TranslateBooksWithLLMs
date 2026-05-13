@@ -377,6 +377,53 @@ body {
     padding-left: 0.25rem;
 }
 
+/* Prompt-options checkbox rows: shared layout for all toggles
+   (Polish, Bilingual, Draft Mode, Text Cleanup, Disable Auto-Pause). */
+.option-item {
+    margin-bottom: 15px;
+}
+
+.option-item:last-child {
+    margin-bottom: 0;
+}
+
+.option-item__label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    /* Reset inherited form-group label styling so titles/descriptions stay
+       in normal case at a readable, uniform size. */
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    padding-left: 0;
+}
+
+.option-item__title {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.option-item__description {
+    margin: 4px 0 0 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--text-muted-light);
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.option-item__description code {
+    font-size: inherit;
+}
+
 .form-control {
     width: 100%;
     padding: 1rem 1.25rem;

@@ -263,6 +263,22 @@ class DocxTranslationAdapter(TranslationAdapter[str, bytes]):
             import os
             file_href = os.path.basename(source_path)
 
+        # Draft mode bypasses mammoth + tag preservation entirely.
+        if prompt_options and prompt_options.get('draft_mode'):
+            return await self._translate_draft(
+                source_path=source_path,
+                source_language=source_language,
+                target_language=target_language,
+                model_name=model_name,
+                llm_client=llm_client,
+                max_tokens_per_chunk=max_tokens_per_chunk,
+                log_callback=log_callback,
+                context_manager=context_manager,
+                prompt_options=prompt_options,
+                stats_callback=stats_callback,
+                check_interruption_callback=check_interruption_callback,
+            )
+
         # === RESUME FROM PARTIAL STATE ===
         if resume_state:
             if log_callback:
@@ -374,5 +390,92 @@ class DocxTranslationAdapter(TranslationAdapter[str, bytes]):
             context,
             log_callback
         )
+
+        return docx_bytes, stats
+
+    async def _translate_draft(
+        self,
+        source_path: str,
+        source_language: str,
+        target_language: str,
+        model_name: str,
+        llm_client: Any,
+        max_tokens_per_chunk: int,
+        log_callback: Optional[Callable],
+        context_manager: Optional[Any],
+        prompt_options: Optional[Dict],
+        stats_callback: Optional[Callable],
+        check_interruption_callback: Optional[Callable],
+    ) -> Tuple[bytes, Any]:
+        """
+        Draft-mode DOCX translation: skip mammoth + placeholders.
+
+        Read paragraphs via python-docx, translate as plain text, rebuild
+        a fresh Document with the same page setup. Images are reattached
+        right after their original paragraph (separate image-only paragraph).
+        """
+        import os
+        import tempfile
+
+        from .plain_extractor import extract_plain_paragraphs, build_minimal_docx
+        from src.core.common.plain_text_pipeline import translate_paragraphs_plain
+        from ..epub.translation_metrics import TranslationMetrics
+
+        bilingual_flag = bool(prompt_options.get('bilingual')) if prompt_options else False
+
+        content = extract_plain_paragraphs(source_path)
+
+        if log_callback:
+            log_callback(
+                "draft_extracted",
+                f"📝 Draft mode (DOCX): {len(content.paragraphs_text)} paragraphs, "
+                f"{sum(len(v) for v in content.images_by_paragraph.values())} images anchored"
+            )
+
+        if not content.paragraphs_text:
+            if log_callback:
+                log_callback("draft_empty_docx", "⚠️ No paragraphs found in DOCX")
+            return b'', TranslationMetrics()
+
+        translated, stats, was_interrupted = await translate_paragraphs_plain(
+            paragraphs=content.paragraphs_text,
+            source_language=source_language,
+            target_language=target_language,
+            model_name=model_name,
+            llm_client=llm_client,
+            max_tokens_per_chunk=max_tokens_per_chunk,
+            log_callback=log_callback,
+            stats_callback=stats_callback,
+            context_manager=context_manager,
+            check_interruption_callback=check_interruption_callback,
+            prompt_options=prompt_options,
+        )
+
+        if was_interrupted:
+            if log_callback:
+                log_callback("docx_draft_interrupted", "DOCX draft translation interrupted")
+            return b'', stats
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            build_minimal_docx(
+                translated_paragraphs=translated,
+                content=content,
+                output_path=tmp_path,
+                bilingual=bilingual_flag,
+            )
+            with open(tmp_path, 'rb') as f:
+                docx_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+        if log_callback:
+            log_callback("docx_draft_rebuilt", f"📄 Draft DOCX rebuilt ({len(docx_bytes)} bytes)")
 
         return docx_bytes, stats

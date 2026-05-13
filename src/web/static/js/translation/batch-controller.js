@@ -61,6 +61,7 @@ function getTranslationConfig(file) {
         preserve_technical_content: true,
         text_cleanup: DomHelpers.getElement('textCleanup')?.checked || false,
         refine: DomHelpers.getElement('refineTranslation')?.checked || false,
+        draft_mode: DomHelpers.getElement('draftMode')?.checked || false,
         custom_instruction_file: DomHelpers.getValue('customInstructionSelect') || ''
     };
 

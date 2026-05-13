@@ -235,6 +235,26 @@ class EpubTranslationAdapter(TranslationAdapter[etree._Element, bool]):
         # Extract bilingual flag from prompt_options (bug fix #109)
         bilingual_flag = prompt_options.get('bilingual', False) if prompt_options else False
 
+        # Draft mode bypasses the placeholder pipeline entirely.
+        if prompt_options and prompt_options.get('draft_mode'):
+            return await self._translate_draft(
+                doc_root=doc_root,
+                source_language=source_language,
+                target_language=target_language,
+                model_name=model_name,
+                llm_client=llm_client,
+                max_tokens_per_chunk=max_tokens_per_chunk,
+                log_callback=log_callback,
+                context_manager=context_manager,
+                prompt_options=prompt_options,
+                stats_callback=stats_callback,
+                check_interruption_callback=check_interruption_callback,
+                bilingual_flag=bilingual_flag,
+                global_total_chunks=global_total_chunks,
+                global_completed_chunks=global_completed_chunks,
+                file_href=file_href,
+            )
+
         success, stats = await translate_xhtml_simplified(
             doc_root=doc_root,
             source_language=source_language,
@@ -259,3 +279,83 @@ class EpubTranslationAdapter(TranslationAdapter[etree._Element, bool]):
         )
 
         return success, stats
+
+    async def _translate_draft(
+        self,
+        doc_root: etree._Element,
+        source_language: str,
+        target_language: str,
+        model_name: str,
+        llm_client: Any,
+        max_tokens_per_chunk: int,
+        log_callback: Optional[Callable],
+        context_manager: Optional[Any],
+        prompt_options: Optional[Dict],
+        stats_callback: Optional[Callable],
+        check_interruption_callback: Optional[Callable],
+        bilingual_flag: bool,
+        global_total_chunks: Optional[int],
+        global_completed_chunks: Optional[int],
+        file_href: Optional[str],
+    ) -> Tuple[bool, Any]:
+        """
+        Draft-mode translation path: skip placeholders entirely.
+
+        Extract body as a list of plain paragraphs (anchoring images), translate
+        them via the common plain-text pipeline, then rewrite body with a flat
+        structure (block tags preserved, images reattached after their parent
+        paragraph, inline formatting dropped).
+        """
+        from .plain_extractor import extract_plain_paragraphs, replace_body_with_paragraphs
+        from .translation_metrics import TranslationMetrics
+        from src.core.common.plain_text_pipeline import translate_paragraphs_plain
+
+        body = doc_root.find('.//{http://www.w3.org/1999/xhtml}body')
+        if body is None:
+            body = doc_root.find('.//body')
+
+        if body is None:
+            if log_callback:
+                log_callback("draft_no_body", f"⚠️ {file_href or 'document'}: no <body> found, skipping")
+            return False, TranslationMetrics()
+
+        paragraphs_text, paragraphs_tag, images_by_paragraph = extract_plain_paragraphs(body)
+
+        if log_callback:
+            log_callback(
+                "draft_extracted",
+                f"📝 Draft mode: {len(paragraphs_text)} paragraphs, "
+                f"{sum(len(v) for v in images_by_paragraph.values())} images anchored"
+            )
+
+        translated, stats, was_interrupted = await translate_paragraphs_plain(
+            paragraphs=paragraphs_text,
+            source_language=source_language,
+            target_language=target_language,
+            model_name=model_name,
+            llm_client=llm_client,
+            max_tokens_per_chunk=max_tokens_per_chunk,
+            log_callback=log_callback,
+            stats_callback=stats_callback,
+            context_manager=context_manager,
+            check_interruption_callback=check_interruption_callback,
+            prompt_options=prompt_options,
+            global_total_chunks=global_total_chunks,
+            global_completed_chunks=global_completed_chunks,
+        )
+
+        if was_interrupted:
+            # Caller (EPUB translator) treats failed translation as keeping original;
+            # we leave the body untouched so the partial output keeps the source text.
+            return False, stats
+
+        replace_body_with_paragraphs(
+            body_element=body,
+            translated_paragraphs=translated,
+            paragraphs_tag=paragraphs_tag,
+            images_by_paragraph=images_by_paragraph,
+            bilingual=bilingual_flag,
+            source_paragraphs=paragraphs_text if bilingual_flag else None,
+        )
+
+        return True, stats

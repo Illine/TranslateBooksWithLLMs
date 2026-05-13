@@ -529,12 +529,12 @@
 
                 <div id="promptOptionsSection" class="hidden">
                     <!-- Polish Translation (Refinement Pass) -->
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                    <div class="option-item">
+                        <label class="option-item__label">
                             <input type="checkbox" id="refineTranslation">
                             <div>
-                                <span style="font-weight: 600; color: var(--text-dark);">Polish Translation (2nd Pass)</span>
-                                <p style="margin: 5px 0 0 0; font-size: 0.8125rem; color: var(--text-muted-light);">
+                                <span class="option-item__title">Polish Translation (2nd Pass)</span>
+                                <p class="option-item__description">
                                     Runs a second refinement pass after translation. The LLM rewrites the first-pass translation to improve literary quality, natural flow, and stylistic elegance. Doubles the translation time but significantly improves output quality.
                                 </p>
                             </div>
@@ -542,25 +542,38 @@
                     </div>
 
                     <!-- Bilingual Output -->
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                    <div class="option-item">
+                        <label class="option-item__label">
                             <input type="checkbox" id="bilingualMode">
                             <div>
-                                <span style="font-weight: 600; color: var(--text-dark);">Bilingual Output</span>
-                                <p style="margin: 5px 0 0 0; font-size: 0.8125rem; color: var(--text-muted-light);">
+                                <span class="option-item__title">Bilingual Output</span>
+                                <p class="option-item__description">
                                     Include original text alongside the translation. Each chunk displays the source text followed by its translation, ideal for language learning or side-by-side comparison.
                                 </p>
                             </div>
                         </label>
                     </div>
 
+                    <!-- Draft Mode (EPUB / DOCX plain translation) -->
+                    <div class="option-item">
+                        <label class="option-item__label">
+                            <input type="checkbox" id="draftMode">
+                            <div>
+                                <span class="option-item__title">Draft Mode (EPUB / DOCX)</span>
+                                <p class="option-item__description">
+                                    Very well suited to simple novels and plain prose where structure matters less than reading the translated text. Only paragraph text is sent to the LLM, inline styles and complex markup are dropped. Headings, lists and blockquotes are kept; images stay in the output and are regrouped at the end of their original paragraph. Faster and far more reliable on small or local LLMs that struggle with <code>[id0]</code> placeholders. Less ideal for technical books, illustrated guides or anything where layout carries meaning. Only applies to EPUB and DOCX files.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+
                     <!-- Text Cleanup (OCR Correction) -->
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                    <div class="option-item">
+                        <label class="option-item__label">
                             <input type="checkbox" id="textCleanup">
                             <div>
-                                <span style="font-weight: 600; color: var(--text-dark);">Text Cleanup (OCR Correction)</span>
-                                <p style="margin: 5px 0 0 0; font-size: 0.8125rem; color: var(--text-muted-light);">
+                                <span class="option-item__title">Text Cleanup (OCR Correction)</span>
+                                <p class="option-item__description">
                                     For poorly formatted or OCR-scanned texts. Instructs the LLM to fix: broken line breaks, double spaces, punctuation errors, and merge incorrectly split paragraphs.
                                 </p>
                             </div>
@@ -568,12 +581,12 @@
                     </div>
 
                     <!-- Disable Auto-Pause on Rate Limit -->
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                    <div class="option-item">
+                        <label class="option-item__label">
                             <input type="checkbox" id="disableAutoPause">
                             <div>
-                                <span style="font-weight: 600; color: var(--text-dark);">Don't auto-pause on rate limit (HTTP 429)</span>
-                                <p style="margin: 5px 0 0 0; font-size: 0.8125rem; color: var(--text-muted-light);">
+                                <span class="option-item__title">Don't auto-pause on rate limit (HTTP 429)</span>
+                                <p class="option-item__description">
                                     By default, the translation pauses after the provider rate-limits and asks you to resume manually. Enable this to keep the translation running: it will wait for <code>Retry-After</code> seconds (or 60s default) and auto-resume from the last checkpoint. Useful for long novels on free-tier APIs. Click "Interrupt" anytime to cancel the auto-resume.
                                 </p>
                             </div>
