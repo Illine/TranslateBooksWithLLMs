@@ -45,6 +45,7 @@ class LLMResponse:
     context_used: int = 0  # Total context used (prompt + completion)
     context_limit: int = 0  # Context limit that was set for this request
     was_truncated: bool = False  # True if response was truncated due to context limit
+    was_fallback: bool = False  # True if raw response was used because tag extraction failed
 
 
 class LLMProvider(ABC):

@@ -317,6 +317,16 @@ async def _make_llm_request_with_adaptive_context(
                     log_callback("translation_extraction_failed_preview",
                         f"Response preview (first 300 chars): {full_raw_response[:300]}")
 
+                # Implicit truncation detection: model started <TRANSLATION> but hit EOS before </TRANSLATION>
+                stripped_response = full_raw_response.strip()
+                if (stripped_response.startswith(TRANSLATE_TAG_IN) and not stripped_response.endswith(TRANSLATE_TAG_OUT)):
+                    if context_manager and context_manager.should_retry_with_larger_context(True, llm_response.context_used):
+                        if log_callback:
+                            log_callback("implicit_truncation_retry",
+                                "🔄 Model stopped before closing tag. Retrying with larger context...")
+                        context_manager.increase_context()
+                        continue  # Retry with larger context
+
                 # For EPUB with placeholders, failing to extract is CRITICAL
                 # because using the raw response would include <TRANSLATION> tags in the HTML
                 if has_placeholders:
@@ -331,6 +341,8 @@ async def _make_llm_request_with_adaptive_context(
                         log_callback("using_raw_response_fallback",
                             "Using raw response as fallback (plain text mode)")
                     all_translations.append(full_raw_response.strip())
+                    if last_response:
+                        last_response.was_fallback = True
                 else:
                     # Response contains input - this is an error
                     if log_callback:
@@ -783,11 +795,14 @@ async def translate_chunks(chunks, source_language, target_language, model_name,
                 full_translation_parts.append(translated_chunk_text)
                 progress_tracker.mark_completed(i, chunk_elapsed)
 
-                words = translated_chunk_text.split()
-                if len(words) > 25:
-                    last_successful_llm_context = " ".join(words[-25:])
-                else:
-                    last_successful_llm_context = translated_chunk_text
+                # Only propagate context from properly extracted translations,
+                # not from raw fallback responses which may be in the wrong language.
+                if not (llm_response and getattr(llm_response, 'was_fallback', False)):
+                    words = translated_chunk_text.split()
+                    if len(words) > 25:
+                        last_successful_llm_context = " ".join(words[-25:])
+                    else:
+                        last_successful_llm_context = translated_chunk_text
             else:
                 err_msg_chunk = f"ERROR translating segment {i+1}. Original content preserved."
                 if log_callback:

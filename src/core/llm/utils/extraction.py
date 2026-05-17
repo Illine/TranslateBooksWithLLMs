@@ -171,9 +171,14 @@ class TranslationExtractor:
         response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL | re.IGNORECASE)
 
         # Case 2: Orphan closing tag </think> (when Ollama truncates the opening tag)
-        # Remove everything from the beginning up to and including </think>
+        # Remove everything from the beginning up to and including </think>,
+        # BUT only if the prefix does not contain the opening translation tag.
         before_orphan_removal = response
-        response = re.sub(r'^.*?</think>\s*', '', response, flags=re.DOTALL | re.IGNORECASE)
+        think_match = re.search(r'</think>', response, flags=re.IGNORECASE)
+        if think_match:
+            prefix = response[:think_match.end()]
+            if self._tag_in.lower() not in prefix.lower():
+                response = response[think_match.end():].lstrip()
 
         if before_orphan_removal != response:
             removed_length = len(before_orphan_removal) - len(response)
