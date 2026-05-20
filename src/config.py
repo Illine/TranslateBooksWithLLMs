@@ -107,6 +107,7 @@ _RELOADABLE_ENV_SETTINGS = (
     ('NIM_API_KEY',         'NIM_API_KEY',         ''),
     ('NIM_MODEL',           'NIM_MODEL',           'meta/llama-3.1-8b-instruct'),
     ('OUTPUT_FILENAME_PATTERN', 'OUTPUT_FILENAME_PATTERN', '{originalName} ({targetLang}).{ext}'),
+    ('DISABLE_AUTO_PAUSE',   'DISABLE_AUTO_PAUSE',   'false'),
 )
 
 

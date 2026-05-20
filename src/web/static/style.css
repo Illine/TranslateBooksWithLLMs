@@ -426,16 +426,34 @@ body {
 
 .form-control {
     width: 100%;
-    padding: 1rem 1.25rem;
-    height: 3.5rem;
+    box-sizing: border-box;
+    display: block;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    max-height: 2.75rem;
+    padding: 0 1.25rem;
+    margin: 0;
     background: #ffffff;
     border: none;
     border-radius: 1rem;
     color: #1a1a1a;
     font-size: 1rem;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 2.75rem;
     transition: all 0.3s;
     font-weight: 600;
+    vertical-align: middle;
+}
+
+/* Native form controls have UA-specific intrinsic sizing.
+   Explicit rules force <input> and <select> to identical box geometry. */
+input.form-control,
+select.form-control {
+    height: 2.75rem;
+    min-height: 2.75rem;
+    max-height: 2.75rem;
+    line-height: 2.75rem;
+    padding: 0 1.25rem;
 }
 
 .neu-inset-light .form-control {

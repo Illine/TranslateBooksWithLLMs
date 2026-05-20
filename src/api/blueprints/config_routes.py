@@ -167,7 +167,8 @@ def create_config_blueprint(server_session_id=None):
             "deepseek_api_key_configured": deepseek_count > 0,
             "poe_api_key_configured": poe_count > 0,
             "nim_api_key_configured": nim_count > 0,
-            "output_filename_pattern": _config.OUTPUT_FILENAME_PATTERN
+            "output_filename_pattern": _config.OUTPUT_FILENAME_PATTERN,
+            "disable_auto_pause": str(_config.DISABLE_AUTO_PAUSE).strip().lower() == 'true'
         }
 
         return jsonify(config_response)
@@ -939,10 +940,10 @@ def create_config_blueprint(server_session_id=None):
             'NIM_MODEL',
             'DEFAULT_MODEL',
             'LLM_PROVIDER',
-            'API_ENDPOINT',
             'OLLAMA_API_ENDPOINT',
             'OPENAI_API_ENDPOINT',
-            'OUTPUT_FILENAME_PATTERN'
+            'OUTPUT_FILENAME_PATTERN',
+            'DISABLE_AUTO_PAUSE'
         }
 
         try:

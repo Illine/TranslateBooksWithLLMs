@@ -439,6 +439,14 @@ export const FormManager = {
             if (config.output_filename_pattern) {
                 DomHelpers.setValue('outputFilenamePattern', config.output_filename_pattern);
             }
+
+            // Disable auto-pause on rate limit (runtime behavior default)
+            if (typeof config.disable_auto_pause === 'boolean') {
+                const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
+                if (disableAutoPauseCheckbox) {
+                    disableAutoPauseCheckbox.checked = config.disable_auto_pause;
+                }
+            }
             // Handle API keys - show indicator if configured in .env, otherwise keep placeholder
             ApiKeyUtils.setupField('geminiApiKey', config.gemini_api_key_configured, config.gemini_api_key, config.gemini_api_key_count);
             ApiKeyUtils.setupField('openaiApiKey', config.openai_api_key_configured, config.openai_api_key, config.openai_api_key_count);

@@ -67,7 +67,6 @@ const LOCAL_SETTINGS = [
     'refineTranslation',
     'bilingualMode',
     'draftMode',
-    'disableAutoPause',
     'customInstructionFile',
     'apiEndpointCustomized',  // Track if user manually changed endpoint
     'openaiEndpointCustomized'
@@ -148,46 +147,70 @@ export const SettingsManager = {
      * @private
      */
     _setupAutoSaveListeners() {
-        // Elements that trigger auto-save
-        const autoSaveElements = [
-            // Provider and model
-            { id: 'llmProvider', event: 'change' },
-            { id: 'model', event: 'change' },
-            // API endpoints
-            { id: 'apiEndpoint', event: 'change' },
-            { id: 'openaiEndpoint', event: 'change' },
-            // Output filename pattern
-            { id: 'outputFilenamePattern', event: 'change' },
-            // API keys (save to .env)
-            { id: 'geminiApiKey', event: 'change' },
-            { id: 'openaiApiKey', event: 'change' },
-            { id: 'openrouterApiKey', event: 'change' },
-            { id: 'mistralApiKey', event: 'change' },
-            { id: 'deepseekApiKey', event: 'change' },
-            { id: 'poeApiKey', event: 'change' },
-            { id: 'nimApiKey', event: 'change' },
-            // Languages
+        // Auto-save targets localStorage only. Fields that persist to .env
+        // (provider, model, endpoints, API keys, naming convention) are saved
+        // exclusively via the explicit "Save Settings to .env" button.
+        const localAutoSaveElements = [
             { id: 'sourceLang', event: 'change' },
             { id: 'targetLang', event: 'change' },
             { id: 'customSourceLang', event: 'change' },
             { id: 'customTargetLang', event: 'change' },
-            // Checkboxes
             { id: 'ttsEnabled', event: 'change' },
             { id: 'textCleanup', event: 'change' },
             { id: 'refineTranslation', event: 'change' },
             { id: 'bilingualMode', event: 'change' },
             { id: 'draftMode', event: 'change' },
-            { id: 'disableAutoPause', event: 'change' },
             { id: 'customInstructionSelect', event: 'change' }
         ];
 
-        autoSaveElements.forEach(({ id, event }) => {
+        localAutoSaveElements.forEach(({ id, event }) => {
             const element = DomHelpers.getElement(id);
             if (element) {
                 element.addEventListener(event, () => this._triggerAutoSave());
             }
         });
 
+        // Dirty-tracking for .env fields: any change marks the Save button as
+        // having pending changes; saveAllSettings(true) clears it on success.
+        const envDirtyElements = [
+            { id: 'llmProvider', event: 'change' },
+            { id: 'model', event: 'change' },
+            { id: 'apiEndpoint', event: 'input' },
+            { id: 'openaiEndpoint', event: 'input' },
+            { id: 'outputFilenamePattern', event: 'input' },
+            { id: 'geminiApiKey', event: 'input' },
+            { id: 'openaiApiKey', event: 'input' },
+            { id: 'openrouterApiKey', event: 'input' },
+            { id: 'mistralApiKey', event: 'input' },
+            { id: 'deepseekApiKey', event: 'input' },
+            { id: 'poeApiKey', event: 'input' },
+            { id: 'nimApiKey', event: 'input' },
+            { id: 'disableAutoPause', event: 'change' }
+        ];
+
+        envDirtyElements.forEach(({ id, event }) => {
+            const element = DomHelpers.getElement(id);
+            if (element) {
+                element.addEventListener(event, () => this._markEnvDirty());
+            }
+        });
+    },
+
+    /**
+     * Enable the .env Save button — there are pending unsaved changes
+     */
+    _markEnvDirty() {
+        if (isInitializing) return;
+        const btn = DomHelpers.getElement('saveSettingsBtn');
+        if (btn) btn.disabled = false;
+    },
+
+    /**
+     * Disable the .env Save button — nothing to save
+     */
+    _clearEnvDirty() {
+        const btn = DomHelpers.getElement('saveSettingsBtn');
+        if (btn) btn.disabled = true;
     },
 
     /**
@@ -214,7 +237,7 @@ export const SettingsManager = {
      */
     async _performAutoSave() {
         try {
-            await this.saveAllSettings(true);
+            await this.saveAllSettings(false);
         } catch {
             // Auto-save failed silently
         }
@@ -367,20 +390,17 @@ export const SettingsManager = {
                 draftCheckbox.checked = prefs.draftMode;
             }
         }
-        if (prefs.disableAutoPause !== undefined) {
-            const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
-            if (disableAutoPauseCheckbox) {
-                disableAutoPauseCheckbox.checked = prefs.disableAutoPause;
-            }
-        }
+        // Note: disableAutoPause is now loaded from .env via /api/config in FormManager,
+        // not from localStorage.
 
         // Store custom instruction file for later application (after loadCustomInstructions completes)
         if (prefs.customInstructionFile) {
             window.__pendingCustomInstructionSelection = prefs.customInstructionFile;
         }
 
-        // Keep Prompt Options section open if any option is active
-        const hasAnyPromptOption = prefs.textCleanup || prefs.refineTranslation || prefs.bilingualMode || prefs.draftMode || prefs.disableAutoPause || prefs.customInstructionFile;
+        // Keep Prompt Options section open if any option is active.
+        // Note: disableAutoPause now lives in the Provider & Defaults section, not here.
+        const hasAnyPromptOption = prefs.textCleanup || prefs.refineTranslation || prefs.bilingualMode || prefs.draftMode || prefs.customInstructionFile;
         if (hasAnyPromptOption) {
             const promptOptionsSection = DomHelpers.getElement('promptOptionsSection');
             const promptOptionsIcon = DomHelpers.getElement('promptOptionsIcon');
@@ -436,7 +456,6 @@ export const SettingsManager = {
         const refineTranslationCheckbox = DomHelpers.getElement('refineTranslation');
         const bilingualModeCheckbox = DomHelpers.getElement('bilingualMode');
         const draftModeCheckbox = DomHelpers.getElement('draftMode');
-        const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
 
         const prefs = {
             lastProvider: DomHelpers.getValue('llmProvider'),
@@ -451,7 +470,6 @@ export const SettingsManager = {
             refineTranslation: refineTranslationCheckbox ? refineTranslationCheckbox.checked : false,
             bilingualMode: bilingualModeCheckbox ? bilingualModeCheckbox.checked : false,
             draftMode: draftModeCheckbox ? draftModeCheckbox.checked : false,
-            disableAutoPause: disableAutoPauseCheckbox ? disableAutoPauseCheckbox.checked : false,
             customInstructionFile: DomHelpers.getValue('customInstructionSelect') || ''
         };
 
@@ -558,6 +576,10 @@ export const SettingsManager = {
                 envSettings['OUTPUT_FILENAME_PATTERN'] = filenamePattern;
             }
 
+            // Save disable auto-pause flag (runtime behavior default)
+            const disableAutoPauseCheckbox = DomHelpers.getElement('disableAutoPause');
+            envSettings['DISABLE_AUTO_PAUSE'] = (disableAutoPauseCheckbox && disableAutoPauseCheckbox.checked) ? 'true' : 'false';
+
             // Also save provider and model as defaults
             envSettings['LLM_PROVIDER'] = provider;
             const model = DomHelpers.getValue('model');
@@ -590,6 +612,7 @@ export const SettingsManager = {
                     const result = await ApiClient.saveSettings(envSettings);
                     // Reset the lock since user explicitly saved their choice
                     this.resetEnvModelApplied();
+                    this._clearEnvDirty();
                     return { success: true, savedToEnv: result.saved_keys };
                 } catch (e) {
                     return { success: false, error: e.message };

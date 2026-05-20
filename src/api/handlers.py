@@ -571,14 +571,40 @@ async def perform_actual_translation(translation_id, config, state_manager, outp
             else:
                 cp_data = checkpoint_manager.load_checkpoint(translation_id)
                 if cp_data:
+                    # Track consecutive auto-resume cycles that fail without
+                    # translating any chunk past the checkpoint. After three
+                    # such cycles the daily quota is probably exhausted and
+                    # the loop is just burning time, so we warn the user.
+                    # We keep auto-resuming because they explicitly opted in,
+                    # but the warning lets them choose to pause manually.
+                    resume_index = cp_data['resume_from_index']
+                    last_resume_index = config.get('_auto_resume_last_index')
+                    stuck_count = config.get('_auto_resume_stuck_count', 0)
+                    if last_resume_index == resume_index:
+                        stuck_count += 1
+                    else:
+                        stuck_count = 1
+                    if stuck_count >= 3:
+                        _log_message_callback(
+                            "rate_limit_auto_resume_stuck",
+                            f"⚠️ Auto-resume has looped {stuck_count} times without "
+                            f"progress (still stuck at chunk {resume_index}). Your "
+                            f"daily quota may be exhausted or the provider is "
+                            f"throttling this account; consider interrupting now "
+                            f"and checking your provider's quota dashboard. "
+                            f"Auto-resume will keep trying but may be wasting time."
+                        )
+
                     new_config = dict(config)
                     new_config['is_resume'] = True
-                    new_config['resume_from_index'] = cp_data['resume_from_index']
+                    new_config['resume_from_index'] = resume_index
+                    new_config['_auto_resume_last_index'] = resume_index
+                    new_config['_auto_resume_stuck_count'] = stuck_count
                     checkpoint_manager.mark_running(translation_id)
                     state_manager.set_translation_field(translation_id, 'status', 'running')
                     emit_update(socketio, translation_id, {
                         'status': 'running',
-                        'log': f"▶️ Auto-resuming from chunk {cp_data['resume_from_index']}..."
+                        'log': f"▶️ Auto-resuming from chunk {resume_index}..."
                     }, state_manager)
                     await perform_actual_translation(
                         translation_id, new_config, state_manager, output_dir, socketio

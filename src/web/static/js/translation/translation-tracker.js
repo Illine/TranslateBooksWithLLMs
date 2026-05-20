@@ -848,7 +848,8 @@ export const TranslationTracker = {
     },
 
     /**
-     * Remove all completion cards (called when a new batch starts).
+     * Remove all completion cards. Currently unused — cards are dismissed
+     * individually by the user via the card's close button.
      */
     clearCompletionCards() {
         const container = DomHelpers.getElement('completionCardsContainer');
