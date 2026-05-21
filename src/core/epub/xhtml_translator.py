@@ -999,9 +999,18 @@ def _reconstruct_html(
             # converted back to global indices before we can restore tags
             orig_text_global = PlaceholderManager.restore_to_global(orig_text_local, global_indices)
 
-            # Restore tags in both original and translated
-            orig_restored = tag_preserver.restore_tags(orig_text_global, global_tag_map)
-            trans_restored = tag_preserver.restore_tags(trans_chunk, global_tag_map)
+            # Restore tags in both original and translated. Escape stray
+            # < and > on both sides before tag restoration so any literal
+            # angle brackets present in text content (LLM passthrough or
+            # source-text markers like Korean webnovel <Skill> windows)
+            # do not corrupt the XML when the body is reinjected. See
+            # _escape_stray_angle_brackets() below.
+            orig_restored = tag_preserver.restore_tags(
+                _escape_stray_angle_brackets(orig_text_global), global_tag_map
+            )
+            trans_restored = tag_preserver.restore_tags(
+                _escape_stray_angle_brackets(trans_chunk), global_tag_map
+            )
 
             # Create bilingual block with inline styling (no CSS required)
             bilingual_block = f'''<div class="bilingual-chunk" style="margin-bottom: 1.5em; padding-bottom: 1em; border-bottom: 1px dashed #ccc;">
@@ -1014,8 +1023,27 @@ def _reconstruct_html(
     else:
         # Standard mode: just join translated chunks
         full_translated_text = ''.join(translated_chunks)
+        # Escape stray < and > in LLM output before restoring placeholders.
+        # By this point the joined text should contain only placeholders [idN]
+        # and plain translated text; all real HTML tags came from the source
+        # and live in global_tag_map, ready to be injected by restore_tags().
+        # If the source used literal angle brackets as stylistic markers
+        # (common in Korean webnovels: <SkillName>, <ItemName>, status windows)
+        # the LLM passes them through as raw < and >. Left unescaped, they
+        # become phantom HTML elements at replace_body_content() time and
+        # corrupt the document. Escaping before restore_tags() keeps real
+        # tags (from the tag map) intact while turning stray brackets into
+        # the entities that render as literal "<...>" in the EPUB reader.
+        full_translated_text = _escape_stray_angle_brackets(full_translated_text)
         final_html = tag_preserver.restore_tags(full_translated_text, global_tag_map)
         return final_html
+
+
+def _escape_stray_angle_brackets(text: str) -> str:
+    """Escape every < and > to entities. Placeholders [idN] use square brackets,
+    so they are untouched. Existing HTML entities like &lt; in the text stay
+    intact because we do not re-escape '&'."""
+    return text.replace('<', '&lt;').replace('>', '&gt;')
 
 
 def _replace_body(
