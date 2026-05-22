@@ -48,6 +48,7 @@ async def translate_epub_file(
     openrouter_api_key: Optional[str] = None,
     mistral_api_key: Optional[str] = None,
     deepseek_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
     poe_api_key: Optional[str] = None,
     nim_api_key: Optional[str] = None,
     context_window: int = 2048,
@@ -91,6 +92,7 @@ async def translate_epub_file(
         openrouter_api_key: OpenRouter API key
         mistral_api_key: Mistral API key
         deepseek_api_key: DeepSeek API key
+        anthropic_api_key: Anthropic API key
         poe_api_key: Poe API key
         nim_api_key: NVIDIA NIM API key
         context_window: Context window size for LLM
@@ -140,6 +142,7 @@ async def translate_epub_file(
         openrouter_api_key=openrouter_api_key,
         mistral_api_key=mistral_api_key,
         deepseek_api_key=deepseek_api_key,
+        anthropic_api_key=anthropic_api_key,
         poe_api_key=poe_api_key,
         nim_api_key=nim_api_key,
         cli_api_endpoint=cli_api_endpoint,
@@ -391,6 +394,7 @@ def _create_llm_client(
     openrouter_api_key: Optional[str],
     mistral_api_key: Optional[str],
     deepseek_api_key: Optional[str],
+    anthropic_api_key: Optional[str],
     poe_api_key: Optional[str],
     nim_api_key: Optional[str],
     cli_api_endpoint: str,
@@ -403,6 +407,7 @@ def _create_llm_client(
     llm_client = create_llm_client(
         llm_provider, gemini_api_key, cli_api_endpoint, model_name,
         openai_api_key, openrouter_api_key, mistral_api_key, deepseek_api_key,
+        anthropic_api_key=anthropic_api_key,
         poe_api_key=poe_api_key,
         nim_api_key=nim_api_key,
         context_window=initial_context,

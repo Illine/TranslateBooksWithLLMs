@@ -106,6 +106,8 @@ _RELOADABLE_ENV_SETTINGS = (
     ('POE_MODEL',           'POE_MODEL',           'Claude-Sonnet-4'),
     ('NIM_API_KEY',         'NIM_API_KEY',         ''),
     ('NIM_MODEL',           'NIM_MODEL',           'meta/llama-3.1-8b-instruct'),
+    ('ANTHROPIC_API_KEY',   'ANTHROPIC_API_KEY',   ''),
+    ('ANTHROPIC_MODEL',     'ANTHROPIC_MODEL',     'claude-sonnet-4-6'),
     ('OUTPUT_FILENAME_PATTERN', 'OUTPUT_FILENAME_PATTERN', '{originalName} ({targetLang}).{ext}'),
     ('DISABLE_AUTO_PAUSE',   'DISABLE_AUTO_PAUSE',   'false'),
 )
@@ -243,7 +245,8 @@ MIN_CHUNK_SIZE_TOKENS = 50
 
 # LLM Provider configuration
 # LLM_PROVIDER, GEMINI_*, OPENAI_*, OPENROUTER_API_KEY/MODEL, MISTRAL_API_KEY/MODEL,
-# DEEPSEEK_API_KEY/MODEL, POE_API_KEY/MODEL, NIM_API_KEY/MODEL are loaded via
+# DEEPSEEK_API_KEY/MODEL, POE_API_KEY/MODEL, NIM_API_KEY/MODEL,
+# ANTHROPIC_API_KEY/MODEL are loaded via
 # _apply_reloadable_env_settings() so reload_config() can refresh them at runtime.
 OPENROUTER_API_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 MISTRAL_API_ENDPOINT = os.getenv('MISTRAL_API_ENDPOINT', 'https://api.mistral.ai/v1/chat/completions')
@@ -253,6 +256,11 @@ DEEPSEEK_API_ENDPOINT = os.getenv('DEEPSEEK_API_ENDPOINT', 'https://api.deepseek
 DEEPSEEK_DISABLE_THINKING = os.getenv('DEEPSEEK_DISABLE_THINKING', 'true').lower() == 'true'
 POE_API_ENDPOINT = os.getenv('POE_API_ENDPOINT', 'https://api.poe.com/v1/chat/completions')
 NIM_API_ENDPOINT = os.getenv('NIM_API_ENDPOINT', 'https://integrate.api.nvidia.com/v1/chat/completions')
+ANTHROPIC_API_ENDPOINT = os.getenv('ANTHROPIC_API_ENDPOINT', 'https://api.anthropic.com/v1/messages')
+# Wrap the system prompt in a cache_control block so Anthropic prompt caching
+# kicks in. Saves up to 90% on input tokens for the stable part across chunks
+# of the same book. Set to 'false' to disable for debugging.
+ANTHROPIC_PROMPT_CACHING = os.getenv('ANTHROPIC_PROMPT_CACHING', 'true').lower() == 'true'
 
 # SRT-specific configuration
 SRT_LINES_PER_BLOCK = int(os.getenv('SRT_LINES_PER_BLOCK', '5'))
@@ -539,6 +547,7 @@ class TranslationConfig:
     deepseek_api_key: str = DEEPSEEK_API_KEY
     poe_api_key: str = POE_API_KEY
     nim_api_key: str = NIM_API_KEY
+    anthropic_api_key: str = ANTHROPIC_API_KEY
 
     # LLM parameters
     timeout: int = REQUEST_TIMEOUT
@@ -578,6 +587,7 @@ class TranslationConfig:
             deepseek_api_key=getattr(args, 'deepseek_api_key', DEEPSEEK_API_KEY),
             poe_api_key=getattr(args, 'poe_api_key', POE_API_KEY),
             nim_api_key=getattr(args, 'nim_api_key', NIM_API_KEY),
+            anthropic_api_key=getattr(args, 'anthropic_api_key', ANTHROPIC_API_KEY),
             max_tokens_per_chunk=getattr(args, 'max_tokens_per_chunk', MAX_TOKENS_PER_CHUNK),
             soft_limit_ratio=getattr(args, 'soft_limit_ratio', SOFT_LIMIT_RATIO)
         )
@@ -607,6 +617,7 @@ class TranslationConfig:
             deepseek_api_key=request_data.get('deepseek_api_key', DEEPSEEK_API_KEY),
             poe_api_key=request_data.get('poe_api_key', POE_API_KEY),
             nim_api_key=request_data.get('nim_api_key', NIM_API_KEY),
+            anthropic_api_key=request_data.get('anthropic_api_key', ANTHROPIC_API_KEY),
             max_tokens_per_chunk=request_data.get('max_tokens_per_chunk', MAX_TOKENS_PER_CHUNK),
             soft_limit_ratio=request_data.get('soft_limit_ratio', SOFT_LIMIT_RATIO)
         )
@@ -630,6 +641,7 @@ class TranslationConfig:
             'deepseek_api_key': self.deepseek_api_key,
             'poe_api_key': self.poe_api_key,
             'nim_api_key': self.nim_api_key,
+            'anthropic_api_key': self.anthropic_api_key,
             'max_tokens_per_chunk': self.max_tokens_per_chunk,
             'soft_limit_ratio': self.soft_limit_ratio
         }

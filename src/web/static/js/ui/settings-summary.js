@@ -15,6 +15,7 @@ const PROVIDER_LABELS = {
     openrouter: 'OpenRouter',
     mistral: 'Mistral',
     deepseek: 'DeepSeek',
+    anthropic: 'Anthropic',
     poe: 'Poe',
     nim: 'NVIDIA NIM',
 };

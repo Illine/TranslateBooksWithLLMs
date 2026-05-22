@@ -81,6 +81,7 @@ const ENV_SETTINGS_MAP = {
     'openrouterApiKey': 'OPENROUTER_API_KEY',
     'mistralApiKey': 'MISTRAL_API_KEY',
     'deepseekApiKey': 'DEEPSEEK_API_KEY',
+    'anthropicApiKey': 'ANTHROPIC_API_KEY',
     'poeApiKey': 'POE_API_KEY',
     'nimApiKey': 'NIM_API_KEY'
 };
@@ -183,6 +184,7 @@ export const SettingsManager = {
             { id: 'openrouterApiKey', event: 'input' },
             { id: 'mistralApiKey', event: 'input' },
             { id: 'deepseekApiKey', event: 'input' },
+            { id: 'anthropicApiKey', event: 'input' },
             { id: 'poeApiKey', event: 'input' },
             { id: 'nimApiKey', event: 'input' },
             { id: 'disableAutoPause', event: 'change' }
@@ -501,6 +503,7 @@ export const SettingsManager = {
             'openrouter': 'OPENROUTER_API_KEY',
             'mistral': 'MISTRAL_API_KEY',
             'deepseek': 'DEEPSEEK_API_KEY',
+            'anthropic': 'ANTHROPIC_API_KEY',
             'poe': 'POE_API_KEY',
             'nim': 'NIM_API_KEY'
         };
@@ -552,6 +555,9 @@ export const SettingsManager = {
             } else if (provider === 'deepseek') {
                 const key = DomHelpers.getValue('deepseekApiKey');
                 if (key) envSettings['DEEPSEEK_API_KEY'] = key;
+            } else if (provider === 'anthropic') {
+                const key = DomHelpers.getValue('anthropicApiKey');
+                if (key) envSettings['ANTHROPIC_API_KEY'] = key;
             } else if (provider === 'poe') {
                 const key = DomHelpers.getValue('poeApiKey');
                 if (key) envSettings['POE_API_KEY'] = key;
@@ -593,6 +599,8 @@ export const SettingsManager = {
                     envSettings['MISTRAL_MODEL'] = model;
                 } else if (provider === 'deepseek') {
                     envSettings['DEEPSEEK_MODEL'] = model;
+                } else if (provider === 'anthropic') {
+                    envSettings['ANTHROPIC_MODEL'] = model;
                 } else if (provider === 'poe') {
                     envSettings['POE_MODEL'] = model;
                 } else if (provider === 'nim') {

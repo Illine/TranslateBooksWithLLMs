@@ -41,6 +41,7 @@ async def translate_file(
     openrouter_api_key: Optional[str] = None,
     mistral_api_key: Optional[str] = None,
     deepseek_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
     poe_api_key: Optional[str] = None,
     nim_api_key: Optional[str] = None,
     context_window: Optional[int] = None,
@@ -77,6 +78,7 @@ async def translate_file(
         openrouter_api_key: OpenRouter API key (required for openrouter provider)
         mistral_api_key: Mistral API key (required for mistral provider)
         deepseek_api_key: DeepSeek API key (required for deepseek provider)
+        anthropic_api_key: Anthropic API key (required for anthropic provider)
         poe_api_key: Poe API key (required for poe provider)
         nim_api_key: NVIDIA NIM API key
         context_window: Maximum context window size in tokens
@@ -156,6 +158,7 @@ async def translate_file(
             openrouter_api_key=openrouter_api_key,
             mistral_api_key=mistral_api_key,
             deepseek_api_key=deepseek_api_key,
+            anthropic_api_key=anthropic_api_key,
             poe_api_key=poe_api_key,
             nim_api_key=nim_api_key,
             context_window=context_window or 2048,
@@ -187,6 +190,7 @@ async def translate_file(
             openrouter_api_key=openrouter_api_key,
             mistral_api_key=mistral_api_key,
             deepseek_api_key=deepseek_api_key,
+            anthropic_api_key=anthropic_api_key,
             poe_api_key=poe_api_key
         )
 
@@ -255,6 +259,7 @@ async def translate_file(
         'openrouter_api_key': openrouter_api_key,
         'mistral_api_key': mistral_api_key,
         'deepseek_api_key': deepseek_api_key,
+        'anthropic_api_key': anthropic_api_key,
         'poe_api_key': poe_api_key,
         'prompt_options': prompt_options,
     }

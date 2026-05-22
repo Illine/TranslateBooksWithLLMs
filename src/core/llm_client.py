@@ -169,6 +169,7 @@ def create_llm_client(llm_provider: str, gemini_api_key: Optional[str],
                       openrouter_api_key: Optional[str] = None,
                       mistral_api_key: Optional[str] = None,
                       deepseek_api_key: Optional[str] = None,
+                      anthropic_api_key: Optional[str] = None,
                       poe_api_key: Optional[str] = None,
                       nim_api_key: Optional[str] = None,
                       context_window: Optional[int] = None,
@@ -177,7 +178,7 @@ def create_llm_client(llm_provider: str, gemini_api_key: Optional[str],
     Factory function to create LLM client based on provider or custom endpoint
 
     Args:
-        llm_provider: Provider type ('ollama', 'gemini', 'openai', 'openrouter', 'mistral', 'deepseek', or 'poe', or 'nim')
+        llm_provider: Provider type ('ollama', 'gemini', 'openai', 'openrouter', 'mistral', 'deepseek', 'anthropic', or 'poe', or 'nim')
         gemini_api_key: API key for Gemini provider
         api_endpoint: API endpoint for custom Ollama instance or OpenAI-compatible API
         model_name: Model name to use
@@ -185,6 +186,7 @@ def create_llm_client(llm_provider: str, gemini_api_key: Optional[str],
         openrouter_api_key: API key for OpenRouter provider
         mistral_api_key: API key for Mistral provider
         deepseek_api_key: API key for DeepSeek provider
+        anthropic_api_key: API key for Anthropic provider
         poe_api_key: API key for Poe provider
         nim_api_key: API key for NVIDIA NIM provider
         context_window: Context window size for the model
@@ -204,6 +206,8 @@ def create_llm_client(llm_provider: str, gemini_api_key: Optional[str],
         return LLMClient(provider_type="mistral", model=model_name, api_key=mistral_api_key)
     if llm_provider == "deepseek":
         return LLMClient(provider_type="deepseek", model=model_name, api_key=deepseek_api_key)
+    if llm_provider == "anthropic":
+        return LLMClient(provider_type="anthropic", model=model_name, api_key=anthropic_api_key)
     if llm_provider == "poe":
         return LLMClient(provider_type="poe", model=model_name, api_key=poe_api_key)
     if llm_provider == "nim":

@@ -60,6 +60,18 @@ DEFAULT_PRICING = {
         "deepseek-ai/deepseek-v3":      {"input": 0.27, "output": 1.10},
         "deepseek-ai/deepseek-r1":      {"input": 0.55, "output": 2.19},
     },
+    "anthropic": {
+        # Base (cache-miss) rates. Cache write = 1.25x input, cache read = 0.1x input;
+        # estimator does not yet model caching, so real spend on a long book is lower.
+        "claude-opus-4-7":   {"input": 15.00, "output": 75.00, "note": "Opus 4.7 (Jan 2026)"},
+        "claude-opus-4":     {"input": 15.00, "output": 75.00, "note": "Legacy Opus 4"},
+        "claude-sonnet-4-6": {"input": 3.00,  "output": 15.00, "note": "Sonnet 4.6 (Jan 2026)"},
+        "claude-sonnet-4":   {"input": 3.00,  "output": 15.00, "note": "Legacy Sonnet 4"},
+        "claude-haiku-4-5":  {"input": 1.00,  "output": 5.00,  "note": "Haiku 4.5 (Oct 2025)"},
+        "claude-3-5-sonnet": {"input": 3.00,  "output": 15.00, "note": "Legacy 3.5 Sonnet"},
+        "claude-3-5-haiku":  {"input": 0.80,  "output": 4.00,  "note": "Legacy 3.5 Haiku"},
+        "claude-3-opus":     {"input": 15.00, "output": 75.00, "note": "Legacy 3 Opus"},
+    },
 }
 
 

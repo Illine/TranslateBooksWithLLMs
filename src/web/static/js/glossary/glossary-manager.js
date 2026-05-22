@@ -1445,9 +1445,16 @@ async function handleNerExtract() {
     // NER targets the same backend the user has configured for translation.
     const provider = (DomHelpers.getValue('llmProvider') || '').trim();
     const model = (DomHelpers.getValue('model') || '').trim();
-    const apiEndpoint = (provider === 'openai'
-        ? DomHelpers.getValue('openaiEndpoint')
-        : DomHelpers.getValue('apiEndpoint')) || '';
+    // Only providers that talk to a user-configured endpoint should send one.
+    // Cloud providers (anthropic, gemini, openrouter, ...) use hard-coded URLs
+    // baked into their provider class; sending the Ollama endpoint here would
+    // misroute the request to localhost:11434.
+    let apiEndpoint = '';
+    if (provider === 'openai') {
+        apiEndpoint = DomHelpers.getValue('openaiEndpoint') || '';
+    } else if (provider === 'ollama' || !provider) {
+        apiEndpoint = DomHelpers.getValue('apiEndpoint') || '';
+    }
     const apiKey = provider ? ApiKeyUtils.getValueForProvider(provider) : '';
 
     const payload = new FormData();

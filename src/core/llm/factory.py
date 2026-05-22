@@ -14,7 +14,9 @@ from src.config import (
     DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_ENDPOINT,
     DEEPSEEK_DISABLE_THINKING,
     POE_API_KEY, POE_MODEL, POE_API_ENDPOINT,
-    NIM_API_KEY, NIM_MODEL, NIM_API_ENDPOINT
+    NIM_API_KEY, NIM_MODEL, NIM_API_ENDPOINT,
+    ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_API_ENDPOINT,
+    ANTHROPIC_PROMPT_CACHING
 )
 from .base import LLMProvider, normalize_api_keys
 from .providers.ollama import OllamaProvider
@@ -24,6 +26,7 @@ from .providers.openrouter import OpenRouterProvider
 from .providers.mistral import MistralProvider
 from .providers.deepseek import DeepSeekProvider
 from .providers.poe import PoeProvider
+from .providers.anthropic import AnthropicProvider
 
 
 def _require_key(raw, error_message: str):
@@ -46,7 +49,7 @@ def create_llm_provider(provider_type: str = "ollama", **kwargs) -> LLMProvider:
     automatically switches to Gemini provider.
 
     Args:
-        provider_type: Type of provider ("ollama", "openai", "gemini", "openrouter", "mistral", "deepseek", "poe")
+        provider_type: Type of provider ("ollama", "openai", "gemini", "openrouter", "mistral", "deepseek", "poe", "anthropic")
         **kwargs: Provider-specific parameters:
             - api_endpoint: API endpoint URL (Ollama, OpenAI)
             - model: Model name/identifier
@@ -150,6 +153,18 @@ def create_llm_provider(provider_type: str = "ollama", **kwargs) -> LLMProvider:
             api_key=api_key,
             model=kwargs.get("model", POE_MODEL),
             api_endpoint=POE_API_ENDPOINT
+        )
+    elif provider_type.lower() == "anthropic":
+        api_key = _require_key(
+            kwargs.get("api_key") or kwargs.get("anthropic_api_key")
+            or os.getenv("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY),
+            "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter."
+        )
+        return AnthropicProvider(
+            api_key=api_key,
+            model=kwargs.get("model", ANTHROPIC_MODEL),
+            api_endpoint=kwargs.get("api_endpoint", ANTHROPIC_API_ENDPOINT),
+            enable_prompt_caching=kwargs.get("anthropic_prompt_caching", ANTHROPIC_PROMPT_CACHING),
         )
     elif provider_type.lower() == "nim":
         api_key = _require_key(

@@ -23,6 +23,7 @@ const PROVIDER_LOGOS = {
     ollama: '/static/img/providers/ollama.png',
     poe: '/static/img/providers/poe.png',
     deepseek: '/static/img/providers/deepseek.png',
+    anthropic: '/static/img/providers/anthropic.png',
     mistral: '/static/img/providers/mistral.png',
     gemini: '/static/img/providers/gemini.png',
     openai: '/static/img/providers/openai.png',
@@ -37,6 +38,7 @@ const PROVIDER_META = {
     ollama: { name: 'Ollama', description: 'Local' },
     poe: { name: 'Poe', description: 'Multi-Provider' },
     deepseek: { name: 'DeepSeek', description: 'Cloud API' },
+    anthropic: { name: 'Anthropic', description: 'Cloud API' },
     mistral: { name: 'Mistral', description: 'Cloud API' },
     gemini: { name: 'Gemini', description: 'Cloud' },
     openai: { name: 'OpenAI', description: 'Compatible' },
@@ -62,6 +64,15 @@ const DEEPSEEK_FALLBACK_MODELS = [
     { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
     { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner (Thinking)' }
+];
+
+/**
+ * Fallback Anthropic models list (used when API fetch fails)
+ */
+const ANTHROPIC_FALLBACK_MODELS = [
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
 ];
 
 /**
@@ -324,7 +335,7 @@ function populateModelSelect(models, defaultModel = null, provider = 'ollama') {
             }
             modelSelect.appendChild(option);
         });
-    } else if (provider === 'deepseek' || provider === 'nim') {
+    } else if (provider === 'deepseek' || provider === 'anthropic' || provider === 'nim') {
         models.forEach(model => {
             const option = document.createElement('option');
             option.value = model.value;
@@ -516,9 +527,10 @@ export const ProviderManager = {
         const openaiEndpointRow = DomHelpers.getElement('openaiEndpointRow');
         const openrouterSettings = DomHelpers.getElement('openrouterSettings');
 
-        // Get mistral, deepseek, poe and nim settings elements once
+        // Get mistral, deepseek, anthropic, poe and nim settings elements once
         const mistralSettings = DomHelpers.getElement('mistralSettings');
         const deepseekSettings = DomHelpers.getElement('deepseekSettings');
+        const anthropicSettings = DomHelpers.getElement('anthropicSettings');
         const poeSettings = DomHelpers.getElement('poeSettings');
         const nimSettings = DomHelpers.getElement('nimSettings');
 
@@ -531,6 +543,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadOllamaModels();
@@ -542,6 +555,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'block';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadPoeModels();
@@ -553,6 +567,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadGeminiModels();
@@ -564,6 +579,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadOpenAIModels();
@@ -575,6 +591,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'block';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadOpenRouterModels();
@@ -586,6 +603,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'block';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadMistralModels();
@@ -597,9 +615,22 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'block';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'none';
             if (loadModels) this.loadDeepSeekModels();
+        } else if (provider === 'anthropic') {
+            DomHelpers.hide('ollamaSettings');
+            if (geminiSettings) geminiSettings.style.display = 'none';
+            if (openaiApiKeyGroup) openaiApiKeyGroup.style.display = 'none';
+            if (openaiEndpointRow) openaiEndpointRow.style.display = 'none';
+            if (openrouterSettings) openrouterSettings.style.display = 'none';
+            if (mistralSettings) mistralSettings.style.display = 'none';
+            if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'block';
+            if (poeSettings) poeSettings.style.display = 'none';
+            if (nimSettings) nimSettings.style.display = 'none';
+            if (loadModels) this.loadAnthropicModels();
         } else if (provider === 'nim') {
             DomHelpers.hide('ollamaSettings');
             if (geminiSettings) geminiSettings.style.display = 'none';
@@ -608,6 +639,7 @@ export const ProviderManager = {
             if (openrouterSettings) openrouterSettings.style.display = 'none';
             if (mistralSettings) mistralSettings.style.display = 'none';
             if (deepseekSettings) deepseekSettings.style.display = 'none';
+            if (anthropicSettings) anthropicSettings.style.display = 'none';
             if (poeSettings) poeSettings.style.display = 'none';
             if (nimSettings) nimSettings.style.display = 'block';
             if (loadModels) this.loadNimModels();
@@ -634,6 +666,8 @@ export const ProviderManager = {
             this.loadMistralModels();
         } else if (provider === 'deepseek') {
             this.loadDeepSeekModels();
+        } else if (provider === 'anthropic') {
+            this.loadAnthropicModels();
         } else if (provider === 'nim') {
             this.loadNimModels();
         }
@@ -1091,6 +1125,67 @@ export const ProviderManager = {
 
             StateManager.setState('models.availableModels', DEEPSEEK_FALLBACK_MODELS.map(m => m.value));
             StatusManager.setConnected('deepseek', DEEPSEEK_FALLBACK_MODELS.length);
+        }
+    },
+
+    /**
+     * Load Anthropic models dynamically from API
+     */
+    async loadAnthropicModels() {
+        const modelSelect = DomHelpers.getElement('model');
+        if (!modelSelect) return;
+
+        modelSelect.innerHTML = '<option value="">Loading Anthropic models...</option>';
+        StatusManager.setChecking();
+
+        try {
+            // Use ApiKeyUtils to get API key (returns '__USE_ENV__' if configured in .env)
+            const apiKey = ApiKeyUtils.getValue('anthropicApiKey');
+            if (!apiKey) {
+                MessageLogger.showMessage('Anthropic API key required', 'warning');
+                modelSelect.innerHTML = '<option value="">Enter API key first</option>';
+                StatusManager.setError('No API key');
+                return;
+            }
+
+            const data = await ApiClient.getModels('anthropic', { apiKey });
+
+            if (data.models && data.models.length > 0) {
+                MessageLogger.showMessage('', '');
+
+                // Format models for the dropdown
+                const formattedModels = data.models.map(m => ({
+                    value: m.id,
+                    label: m.name || m.id,
+                    context_length: m.context_length
+                }));
+
+                populateModelSelect(formattedModels, data.default, 'anthropic');
+                MessageLogger.addLog(`${data.count} Anthropic model(s) loaded`);
+
+                SettingsManager.applyPendingModelSelection();
+                ModelDetector.checkAndShowRecommendation();
+
+                StateManager.setState('models.availableModels', formattedModels.map(m => m.value));
+                StatusManager.setConnected('anthropic', data.count);
+            } else {
+                // Use fallback list
+                const errorMessage = data.error || 'Could not load models from Anthropic API';
+                MessageLogger.showMessage(`${errorMessage}. Using fallback list.`, 'warning');
+                populateModelSelect(ANTHROPIC_FALLBACK_MODELS, 'claude-sonnet-4-6', 'anthropic');
+                MessageLogger.addLog(`Using fallback Anthropic models list`);
+
+                StateManager.setState('models.availableModels', ANTHROPIC_FALLBACK_MODELS.map(m => m.value));
+                StatusManager.setConnected('anthropic', ANTHROPIC_FALLBACK_MODELS.length);
+            }
+        } catch (error) {
+            // Use fallback list on error
+            MessageLogger.showMessage(`Error: ${error.message}. Using fallback list.`, 'warning');
+            MessageLogger.addLog(`Anthropic API error: ${error.message}. Using fallback list.`);
+            populateModelSelect(ANTHROPIC_FALLBACK_MODELS, 'claude-sonnet-4-6', 'anthropic');
+
+            StateManager.setState('models.availableModels', ANTHROPIC_FALLBACK_MODELS.map(m => m.value));
+            StatusManager.setConnected('anthropic', ANTHROPIC_FALLBACK_MODELS.length);
         }
     },
 

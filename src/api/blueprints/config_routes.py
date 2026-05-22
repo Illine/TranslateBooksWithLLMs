@@ -98,6 +98,8 @@ def create_config_blueprint(server_session_id=None):
             return _get_mistral_models(api_key)
         elif provider == 'deepseek':
             return _get_deepseek_models(api_key)
+        elif provider == 'anthropic':
+            return _get_anthropic_models(api_key)
         elif provider == 'poe':
             return _get_poe_models(api_key)
         elif provider == 'nim':
@@ -131,6 +133,7 @@ def create_config_blueprint(server_session_id=None):
         openrouter_mask, openrouter_count = mask_api_key(_config.OPENROUTER_API_KEY)
         mistral_mask, mistral_count = mask_api_key(_config.MISTRAL_API_KEY)
         deepseek_mask, deepseek_count = mask_api_key(_config.DEEPSEEK_API_KEY)
+        anthropic_mask, anthropic_count = mask_api_key(_config.ANTHROPIC_API_KEY)
         poe_mask, poe_count = mask_api_key(_config.POE_API_KEY)
         nim_mask, nim_count = mask_api_key(_config.NIM_API_KEY)
 
@@ -151,6 +154,7 @@ def create_config_blueprint(server_session_id=None):
             "openrouter_api_key": openrouter_mask,
             "mistral_api_key": mistral_mask,
             "deepseek_api_key": deepseek_mask,
+            "anthropic_api_key": anthropic_mask,
             "poe_api_key": poe_mask,
             "nim_api_key": nim_mask,
             "gemini_api_key_count": gemini_count,
@@ -158,6 +162,7 @@ def create_config_blueprint(server_session_id=None):
             "openrouter_api_key_count": openrouter_count,
             "mistral_api_key_count": mistral_count,
             "deepseek_api_key_count": deepseek_count,
+            "anthropic_api_key_count": anthropic_count,
             "poe_api_key_count": poe_count,
             "nim_api_key_count": nim_count,
             "gemini_api_key_configured": gemini_count > 0,
@@ -165,6 +170,7 @@ def create_config_blueprint(server_session_id=None):
             "openrouter_api_key_configured": openrouter_count > 0,
             "mistral_api_key_configured": mistral_count > 0,
             "deepseek_api_key_configured": deepseek_count > 0,
+            "anthropic_api_key_configured": anthropic_count > 0,
             "poe_api_key_configured": poe_count > 0,
             "nim_api_key_configured": nim_count > 0,
             "output_filename_pattern": _config.OUTPUT_FILENAME_PATTERN,
@@ -364,6 +370,58 @@ def create_config_blueprint(server_session_id=None):
                 "status": "deepseek_error",
                 "count": 0,
                 "error": f"Error connecting to DeepSeek API: {str(e)}"
+            })
+
+    def _get_anthropic_models(provided_api_key=None):
+        """Get available models from Anthropic API"""
+        api_key = _resolve_api_key(provided_api_key, 'ANTHROPIC_API_KEY', _config.ANTHROPIC_API_KEY)
+        default_model = _config.ANTHROPIC_MODEL if _config.ANTHROPIC_MODEL else "claude-sonnet-4-6"
+
+        if not api_key:
+            return jsonify({
+                "models": [],
+                "model_names": [],
+                "default": default_model,
+                "status": "api_key_missing",
+                "count": 0,
+                "error": "Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter."
+            })
+
+        try:
+            from src.core.llm import AnthropicProvider
+
+            anthropic_provider = AnthropicProvider(api_key=api_key)
+            models = asyncio.run(anthropic_provider.get_available_models())
+
+            if models:
+                model_names = [m['id'] for m in models]
+                if default_model not in model_names and model_names:
+                    default_model = model_names[0]
+                return jsonify({
+                    "models": models,
+                    "model_names": model_names,
+                    "default": default_model,
+                    "status": "anthropic_connected",
+                    "count": len(models)
+                })
+            else:
+                return jsonify({
+                    "models": [],
+                    "model_names": [],
+                    "default": default_model,
+                    "status": "anthropic_error",
+                    "count": 0,
+                    "error": "Failed to retrieve Anthropic models"
+                })
+
+        except Exception as e:
+            return jsonify({
+                "models": [],
+                "model_names": [],
+                "default": default_model,
+                "status": "anthropic_error",
+                "count": 0,
+                "error": f"Error connecting to Anthropic API: {str(e)}"
             })
 
     def _get_poe_models(provided_api_key=None):
@@ -994,6 +1052,7 @@ def create_config_blueprint(server_session_id=None):
             "openrouter_api_key_configured": bool(_config.OPENROUTER_API_KEY),
             "mistral_api_key_configured": bool(_config.MISTRAL_API_KEY),
             "deepseek_api_key_configured": bool(_config.DEEPSEEK_API_KEY),
+            "anthropic_api_key_configured": bool(_config.ANTHROPIC_API_KEY),
             "poe_api_key_configured": bool(_config.POE_API_KEY),
             "nim_api_key_configured": bool(_config.NIM_API_KEY),
             "default_model": _config.DEFAULT_MODEL or "",

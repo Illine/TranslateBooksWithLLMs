@@ -851,9 +851,21 @@ def create_glossary_blueprint(store: Optional[GlossaryStore] = None):
 
             provider_type = (data.get('provider') or _config.LLM_PROVIDER or 'ollama').lower()
             model = data.get('model') or _config.DEFAULT_MODEL
-            api_endpoint = data.get('api_endpoint') or _config.API_ENDPOINT
+            # Only ollama and openai-compatible providers honour a user-supplied
+            # endpoint. For cloud providers (anthropic, gemini, mistral, ...)
+            # the URL is hard-coded in the provider class, and an inherited
+            # value from another form field would misroute the request.
+            if provider_type in ('ollama', 'openai'):
+                api_endpoint = data.get('api_endpoint') or _config.API_ENDPOINT
+            else:
+                api_endpoint = None
 
             api_key = data.get('api_key')
+            # Frontend sends the '__USE_ENV__' sentinel when the user has the
+            # key only in .env (no value typed in the form). Treat it the same
+            # as a missing key so the env_key_map below kicks in.
+            if api_key == '__USE_ENV__':
+                api_key = None
             if not api_key:
                 env_key_map = {
                     'gemini': 'GEMINI_API_KEY',
@@ -863,6 +875,7 @@ def create_glossary_blueprint(store: Optional[GlossaryStore] = None):
                     'deepseek': 'DEEPSEEK_API_KEY',
                     'poe': 'POE_API_KEY',
                     'nim': 'NIM_API_KEY',
+                    'anthropic': 'ANTHROPIC_API_KEY',
                 }
                 env_var = env_key_map.get(provider_type)
                 if env_var:

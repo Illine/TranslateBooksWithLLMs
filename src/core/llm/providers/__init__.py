@@ -10,6 +10,7 @@ Providers:
     - gemini: Google Gemini API
     - mistral: Mistral AI API
     - deepseek: DeepSeek API (cost-effective Chinese LLM)
+    - anthropic: Native Anthropic Messages API with prompt caching
 """
 
 __all__ = []
