@@ -13,6 +13,7 @@ Features:
 from typing import List, Optional, Union
 import httpx
 import asyncio
+import re
 
 from src.config import (
     REQUEST_TIMEOUT,
@@ -63,6 +64,9 @@ class GeminiProvider(LLMProvider):
         >>> response = await provider.generate("Translate: Hello")
     """
 
+    # Legacy 1.x/2.0 do not accept thinkingConfig; 2.5+ and 3.x+ do.
+    _THINKING_MODEL_PATTERN = re.compile(r"^gemini-(?:2\.5|[3-9]|\d{2,})")
+
     def __init__(self, api_key: Union[str, List[str]], model: str = "gemini-2.0-flash"):
         """
         Initialize the Gemini provider.
@@ -77,8 +81,8 @@ class GeminiProvider(LLMProvider):
         self.api_endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     def _is_thinking_model(self) -> bool:
-        """Check if the current model supports thinking mode (Gemini 2.5+)."""
-        return "2.5" in self.model
+        """Whether the model accepts thinkingConfig (Gemini 2.5+ and 3.x+)."""
+        return bool(self._THINKING_MODEL_PATTERN.match(self.model))
 
     def _get_thinking_config(self) -> dict:
         """Return thinkingConfig to disable thinking for supported models."""
