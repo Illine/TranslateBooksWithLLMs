@@ -232,6 +232,13 @@ class EpubTranslationAdapter(TranslationAdapter[etree._Element, bool]):
         global_total_chunks = kwargs.get('global_total_chunks')
         global_completed_chunks = kwargs.get('global_completed_chunks')
 
+        # Pull fallback runner threading from kwargs so a single
+        # FallbackBudget shared across XHTML files survives this hop.
+        fallback_client = kwargs.get('fallback_client')
+        fallback_budget = kwargs.get('fallback_budget')
+        fallback_config = kwargs.get('fallback_config')
+        validation_config = kwargs.get('validation_config')
+
         # Extract bilingual flag from prompt_options (bug fix #109)
         bilingual_flag = prompt_options.get('bilingual', False) if prompt_options else False
 
@@ -276,6 +283,10 @@ class EpubTranslationAdapter(TranslationAdapter[etree._Element, bool]):
             stats_callback=stats_callback,
             global_total_chunks=global_total_chunks,
             global_completed_chunks=global_completed_chunks,
+            fallback_client=fallback_client,
+            fallback_budget=fallback_budget,
+            fallback_config=fallback_config,
+            validation_config=validation_config,
         )
 
         return success, stats

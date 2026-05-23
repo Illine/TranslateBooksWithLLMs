@@ -191,6 +191,36 @@ TEMPERATURE = float(os.getenv('TEMPERATURE', '0.3'))
 # BLOCK_LOW_AND_ABOVE, HARM_BLOCK_THRESHOLD_UNSPECIFIED.
 GEMINI_SAFETY_THRESHOLD = os.getenv('GEMINI_SAFETY_THRESHOLD', 'BLOCK_NONE')
 
+# Post-validation of translated responses.
+# Detects three classes of silent translation failure that pass earlier checks:
+#   - high latin ratio in the output for latin-source -> non-latin-target pairs
+#     (partial refusal where the model returned source text instead of a
+#     translation),
+#   - refusal markers like "I cannot" / "I'm sorry" in the response prefix,
+#   - echo of the input when the model copied the source instead of
+#     translating.
+# Detection is advisory in MVP: suspicious chunks are logged and counted in
+# the summary but not blocked. See src/core/llm/utils/response_validator.py.
+RESPONSE_VALIDATION_ENABLED = os.getenv('RESPONSE_VALIDATION_ENABLED', 'true').lower() == 'true'
+RESPONSE_VALIDATION_LATIN_THRESHOLD = float(os.getenv('RESPONSE_VALIDATION_LATIN_THRESHOLD', '0.15'))
+RESPONSE_VALIDATION_ECHO_ENABLED = os.getenv('RESPONSE_VALIDATION_ECHO_ENABLED', 'true').lower() == 'true'
+
+# Fallback provider for suspicious chunks. When the primary LLM
+# returns a partial refusal, a refusal message, or completely fails after
+# Phase 1/2 retries, the runner re-runs the chunk through this second
+# provider. Designed for an uncensored local model (e.g. Ollama + qwen3:14b
+# on a workstation) so NSFW books translated primarily with Gemini Flash
+# survive the few percent of chunks Google's internal filter strips.
+# Leave FALLBACK_PROVIDER empty to keep the fallback off (validation still
+# logs warnings).
+# See src/core/llm/utils/fallback_runner.py for trigger semantics.
+FALLBACK_PROVIDER = os.getenv('FALLBACK_PROVIDER', '').strip()
+FALLBACK_MODEL = os.getenv('FALLBACK_MODEL', '').strip()
+FALLBACK_API_KEY = os.getenv('FALLBACK_API_KEY') or None
+FALLBACK_MAX_INVOCATIONS_PER_JOB = int(os.getenv('FALLBACK_MAX_INVOCATIONS_PER_JOB', '100'))
+FALLBACK_TRIGGER_ON_PHASE3 = os.getenv('FALLBACK_TRIGGER_ON_PHASE3', 'true').lower() == 'true'
+FALLBACK_TRIGGER_ON_SUSPICIOUS = os.getenv('FALLBACK_TRIGGER_ON_SUSPICIOUS', 'true').lower() == 'true'
+
 # Auto-pause on HTTP 429 rate limit
 # When True (default): translation pauses after retries are exhausted; user resumes manually.
 # When False: translation auto-resumes from the last checkpoint after waiting `retry_after`

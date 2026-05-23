@@ -153,6 +153,37 @@ async def translate_epub_file(
     if llm_client is None:
         return
 
+    # Build the fallback runner once per job so a single
+    # FallbackBudget is shared across all XHTML files in the EPUB. If
+    # FALLBACK_PROVIDER is not set, fallback_client stays None and the
+    # path is a no-op (validation still logs warnings).
+    from src.core.llm.utils.fallback_runner import (
+        FallbackBudget,
+        FallbackConfig,
+        build_fallback_client,
+    )
+    fallback_config = FallbackConfig.from_env()
+    fallback_client = None
+    fallback_budget = FallbackBudget(limit=fallback_config.max_invocations_per_job)
+    if fallback_config.enabled:
+        try:
+            fallback_client = build_fallback_client(fallback_config)
+            if log_callback and fallback_client is not None:
+                log_callback(
+                    "fallback_runner_ready",
+                    (
+                        f"🔁 Fallback provider configured: "
+                        f"{fallback_config.provider}/{fallback_config.model} "
+                        f"(budget: {fallback_config.max_invocations_per_job} chunks)"
+                    ),
+                )
+        except ValueError as exc:
+            if log_callback:
+                log_callback(
+                    "fallback_config_error",
+                    f"❌ Fallback config invalid: {exc}. Continuing without fallback.",
+                )
+
     # Create adaptive context manager
     context_manager = _create_context_manager(
         llm_provider=llm_provider,
@@ -197,7 +228,10 @@ async def translate_epub_file(
                 stats_callback=stats_callback,
                 check_interruption_callback=check_interruption_callback,
                 prompt_options=prompt_options,
-                restored_docs=restored_docs
+                restored_docs=restored_docs,
+                fallback_client=fallback_client,
+                fallback_budget=fallback_budget,
+                fallback_config=fallback_config,
             )
 
             # 4. Save translated files
@@ -554,6 +588,11 @@ async def _translate_single_xhtml_file(
     check_interruption_callback: Optional[Callable] = None,
     global_total_chunks: Optional[int] = None,
     global_completed_chunks: Optional[int] = None,
+    # Shared across files in one EPUB job.
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[Any] = None,
 ) -> Tuple[Optional[etree._Element], bool, Any]:
     """
     Translate a single XHTML file using GenericTranslationOrchestrator.
@@ -629,6 +668,10 @@ async def _translate_single_xhtml_file(
             resume_state=resume_state,
             global_total_chunks=global_total_chunks,
             global_completed_chunks=global_completed_chunks,
+            fallback_client=fallback_client,
+            fallback_budget=fallback_budget,
+            fallback_config=fallback_config,
+            validation_config=validation_config,
         )
 
         return doc_root, success, stats
@@ -772,7 +815,13 @@ async def _process_all_content_files(
     stats_callback: Optional[Callable] = None,
     check_interruption_callback: Optional[Callable] = None,
     prompt_options: Optional[Dict] = None,
-    restored_docs: Optional[Dict[str, etree._Element]] = None
+    restored_docs: Optional[Dict[str, etree._Element]] = None,
+    # INFRA-12: passed in from translate_epub_file so a single FallbackBudget
+    # is shared across every XHTML file in the EPUB.
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[Any] = None,
 ) -> Dict:
     """
     Process all XHTML content files using GenericTranslationOrchestrator.
@@ -903,6 +952,10 @@ async def _process_all_content_files(
             check_interruption_callback=check_interruption_callback,
             global_total_chunks=total_chunks,
             global_completed_chunks=completed_chunks_global,
+            fallback_client=fallback_client,
+            fallback_budget=fallback_budget,
+            fallback_config=fallback_config,
+            validation_config=validation_config,
         )
 
         # Update global chunk counter

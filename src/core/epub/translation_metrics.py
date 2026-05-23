@@ -54,6 +54,28 @@ class TranslationMetrics:
     correction_attempts: int = 0  # Total LLM correction attempts made
     correction_success: int = 0  # Successful LLM corrections
 
+    # === Post-validation ===
+    # Chunks flagged by validate_translation_response after a successful
+    # extraction. The chunk is still returned (not blocked), so this metric is
+    # advisory - it surfaces silent partial refusals and echoes that pass the
+    # placeholder/tag checks but contain source-language text.
+    suspicious_postvalidation: int = 0
+    suspicious_reasons: Dict[str, int] = field(default_factory=dict)
+    """Map of reason tag -> chunk count. Reasons: refusal_marker,
+    high_latin_ratio, echo_input."""
+
+    # === Fallback provider ===
+    # Chunks routed through the FALLBACK_PROVIDER on a suspicious
+    # post-validation or Phase 3 entry. `fallback_success` counts the chunks
+    # where the fallback produced a clean translation that was used in the
+    # final output; `fallback_failed` counts chunks where the fallback also
+    # refused, returned empty, or raised. `fallback_budget_exhausted` is
+    # incremented once when the per-job hard limit is hit.
+    fallback_invoked: int = 0
+    fallback_success: int = 0
+    fallback_failed: int = 0
+    fallback_budget_exhausted: int = 0
+
     # === Timing ===
     total_time_seconds: float = 0.0
     start_time: float = field(default_factory=time.time)
@@ -114,10 +136,42 @@ class TranslationMetrics:
     
     def record_processed(self) -> None:
         """Record that a chunk has been fully processed (success or failure).
-        
+
         This is used for progress tracking to ensure the progress bar only moves forward.
         """
         self.processed_chunks += 1
+
+    def record_suspicious(self, reason: str) -> None:
+        """Record a chunk flagged by post-validation.
+
+        Args:
+            reason: Short tag from ValidationResult.reason
+                ("refusal_marker", "high_latin_ratio", "echo_input", ...).
+        """
+        self.suspicious_postvalidation += 1
+        self.suspicious_reasons[reason] = self.suspicious_reasons.get(reason, 0) + 1
+
+    def record_fallback_invoked(self, success: bool) -> None:
+        """Record one fallback provider invocation and its outcome.
+
+        Args:
+            success: True when the fallback returned a clean translation
+                that the runner accepted into the final output. False when
+                the fallback also refused, returned empty, or raised.
+        """
+        self.fallback_invoked += 1
+        if success:
+            self.fallback_success += 1
+        else:
+            self.fallback_failed += 1
+
+    def record_fallback_budget_exhausted(self) -> None:
+        """Record that the per-job fallback budget hit its hard limit.
+
+        Should be called at most once per job; downstream code uses
+        FallbackBudget.mark_exhaustion_logged to dedupe.
+        """
+        self.fallback_budget_exhausted += 1
 
     def _update_chunk_stats(self, chunk_size: int) -> None:
         """Update chunk size statistics."""
@@ -219,7 +273,15 @@ class TranslationMetrics:
             "refinement_phase": self.refinement_phase,
             "refinement_chunks_completed": self.refinement_chunks_completed,
             # Progress tracking
-            "processed_chunks": self.processed_chunks
+            "processed_chunks": self.processed_chunks,
+            # Post-validation
+            "suspicious_postvalidation": self.suspicious_postvalidation,
+            "suspicious_reasons": dict(self.suspicious_reasons),
+            # Fallback provider
+            "fallback_invoked": self.fallback_invoked,
+            "fallback_success": self.fallback_success,
+            "fallback_failed": self.fallback_failed,
+            "fallback_budget_exhausted": self.fallback_budget_exhausted,
         }
 
     @classmethod
@@ -274,6 +336,18 @@ class TranslationMetrics:
             # Convert string keys back to int if needed
             metrics.retry_distribution = {int(k): v for k, v in retry_dist.items()}
 
+        # Post-validation
+        metrics.suspicious_postvalidation = data.get("suspicious_postvalidation", 0)
+        suspicious_reasons = data.get("suspicious_reasons", {})
+        if isinstance(suspicious_reasons, dict):
+            metrics.suspicious_reasons = dict(suspicious_reasons)
+
+        # Fallback provider
+        metrics.fallback_invoked = data.get("fallback_invoked", 0)
+        metrics.fallback_success = data.get("fallback_success", 0)
+        metrics.fallback_failed = data.get("fallback_failed", 0)
+        metrics.fallback_budget_exhausted = data.get("fallback_budget_exhausted", 0)
+
         return metrics
 
     def _pct(self, value: int) -> float:
@@ -315,6 +389,40 @@ class TranslationMetrics:
         # Phase 3 stats (untranslated fallback)
         if self.fallback_used > 0:
             summary_lines.append(f"Untranslated chunks (Phase 3 fallback): {self.fallback_used} ({self._pct(self.fallback_used)}%)")
+
+        # Post-validation tracking
+        if self.suspicious_postvalidation > 0:
+            summary_lines.extend([
+                "",
+                "=== Post-validation ===",
+                f"Suspicious chunks: {self.suspicious_postvalidation} ({self._pct(self.suspicious_postvalidation)}%)",
+            ])
+            if self.suspicious_reasons:
+                reason_parts = [
+                    f"{reason}: {count}"
+                    for reason, count in sorted(self.suspicious_reasons.items())
+                ]
+                summary_lines.append(f"  Reasons: {', '.join(reason_parts)}")
+            summary_lines.append(
+                "  ⚠️ Run grep over the output for Latin text to verify (en->ru, en->zh, ...)"
+            )
+
+        # Fallback provider tracking
+        if self.fallback_invoked > 0 or self.fallback_budget_exhausted > 0:
+            summary_lines.extend([
+                "",
+                "=== Fallback Provider ===",
+                f"Invocations: {self.fallback_invoked}",
+                f"Success: {self.fallback_success}/{self.fallback_invoked}"
+                f" ({self._pct_of(self.fallback_success, self.fallback_invoked)}%)",
+                f"Failed: {self.fallback_failed}/{self.fallback_invoked}"
+                f" ({self._pct_of(self.fallback_failed, self.fallback_invoked)}%)",
+            ])
+            if self.fallback_budget_exhausted > 0:
+                summary_lines.append(
+                    "  ⚠️ Fallback budget hit FALLBACK_MAX_INVOCATIONS_PER_JOB - "
+                    "later suspicious chunks were not routed through fallback."
+                )
 
         # Placeholder error tracking
         if self.placeholder_errors > 0:
@@ -434,3 +542,14 @@ class TranslationMetrics:
         # Merge retry distribution
         for attempt, count in other.retry_distribution.items():
             self.retry_distribution[attempt] = self.retry_distribution.get(attempt, 0) + count
+
+        # Merge post-validation
+        self.suspicious_postvalidation += other.suspicious_postvalidation
+        for reason, count in other.suspicious_reasons.items():
+            self.suspicious_reasons[reason] = self.suspicious_reasons.get(reason, 0) + count
+
+        # Merge fallback provider
+        self.fallback_invoked += other.fallback_invoked
+        self.fallback_success += other.fallback_success
+        self.fallback_failed += other.fallback_failed
+        self.fallback_budget_exhausted += other.fallback_budget_exhausted

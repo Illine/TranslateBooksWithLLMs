@@ -23,13 +23,41 @@ from .context_optimizer import (
 )
 from .progress_tracker import TokenProgressTracker
 from .chunking.token_chunker import TokenChunker
-from typing import List, Dict, Tuple, Optional
+from .llm.utils.response_validator import (
+    format_validation_warning,
+    validate_translation_response,
+)
+from typing import List, Dict, Tuple, Optional, Callable
 
 
 # Configuration for context overflow recovery
 MAX_CHUNK_REDUCTION_ATTEMPTS = 3
 CHUNK_REDUCTION_FACTOR = 0.6  # Reduce to 60% of original size each attempt
 MIN_CHUNK_CHARACTERS = 200  # Minimum chunk size to attempt translation
+
+
+def _txt_postvalidate(
+    translated: str,
+    original: str,
+    source_language: str,
+    target_language: str,
+    log_callback: Optional[Callable],
+    chunk_label: str,
+) -> None:
+    """Run post-validation on a TXT/SRT chunk and log the warning if any.
+
+    Stateless wrapper used from the TXT translate/refine and SRT paths where
+    there is no TranslationMetrics aggregation in MVP. Aggregation is a
+    follow-up.
+    """
+    result = validate_translation_response(
+        translated, original, source_language, target_language
+    )
+    if result.is_suspicious and log_callback:
+        log_callback(
+            "postvalidation_warning",
+            format_validation_warning(result, chunk_label),
+        )
 
 
 def _build_chunk_glossary_block(
@@ -821,6 +849,18 @@ async def translate_chunks(chunks, source_language, target_language, model_name,
                 # (placeholder format defined in src/core/epub/constants.py)
                 translated_chunk_text = clean_translated_text(translated_chunk_text)
 
+                # Surface silent partial refusals on the TXT path
+                # too. TXT has no TranslationMetrics aggregation in MVP, so
+                # we only log here; aggregation is a follow-up.
+                _txt_postvalidate(
+                    translated_chunk_text,
+                    main_content_to_translate,
+                    source_language,
+                    target_language,
+                    log_callback,
+                    f"TXT chunk {i + 1}/{total_chunks}",
+                )
+
                 full_translation_parts.append(translated_chunk_text)
                 progress_tracker.mark_completed(i, chunk_elapsed)
 
@@ -995,6 +1035,16 @@ async def _make_refinement_request(
             refined_text = client.extract_translation(full_raw_response)
 
             if refined_text:
+                # Post-validate TXT refine output. Polish step
+                # can refuse on NSFW even when the draft passed.
+                _txt_postvalidate(
+                    refined_text,
+                    draft_translation,
+                    target_language,
+                    target_language,
+                    log_callback,
+                    "TXT refine",
+                )
                 return refined_text, llm_response
             else:
                 # Fallback to raw response if no tags found

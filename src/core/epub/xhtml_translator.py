@@ -54,6 +54,18 @@ from .placeholder_validator import PlaceholderValidator
 from .container import TranslationContainer
 from ..translator import generate_translation_request, _build_chunk_glossary_block
 from ..context_optimizer import AdaptiveContextManager, INITIAL_CONTEXT_SIZE, CONTEXT_STEP, MAX_CONTEXT_SIZE
+from ..llm.utils.response_validator import (
+    ValidationConfig,
+    ValidationResult,
+    format_validation_warning,
+    validate_translation_response,
+)
+from ..llm.utils.fallback_runner import (
+    FallbackBudget,
+    FallbackConfig,
+    should_trigger_fallback,
+    try_fallback_translation,
+)
 from src.config import (
     PLACEHOLDER_PATTERN,
     MAX_PLACEHOLDER_CORRECTION_ATTEMPTS,
@@ -78,6 +90,87 @@ def _log_error(log_callback: Optional[Callable], event_name: str, message: str):
         except Exception:
             # Fallback to legacy callback
             log_callback(event_name, message)
+
+
+def _apply_fallback_outcome(
+    stats: 'TranslationMetrics',
+    budget: Any,
+    used_before: int,
+    accepted: bool,
+) -> None:
+    """Update fallback metrics after one try_fallback_translation call.
+
+    Centralises the consumed-vs-exhausted bookkeeping so Phase 1 success
+    and Phase 3 entry behave identically.
+
+    Args:
+        stats: The job's TranslationMetrics.
+        budget: FallbackBudget shared across the job.
+        used_before: budget.used captured before the call.
+        accepted: True when the fallback output was kept and placed in the
+            final translation. False when the call was made but the output
+            was unusable (refused, empty, raised, placeholder mismatch).
+    """
+    consumed = budget.used > used_before
+    if not consumed:
+        if budget.is_exhausted and stats.fallback_budget_exhausted == 0:
+            stats.record_fallback_budget_exhausted()
+        return
+    stats.record_fallback_invoked(success=accepted)
+
+
+def _postvalidate_chunk(
+    translated_text: str,
+    original_text: str,
+    source_language: str,
+    target_language: str,
+    stats: 'TranslationMetrics',
+    log_callback: Optional[Callable],
+    chunk_label: str,
+    validation_config: Optional[ValidationConfig] = None,
+) -> ValidationResult:
+    """Run post-validation on a translated chunk and update metrics.
+
+    Strips placeholders from both texts before measuring so that tokens like
+    ``[id5]`` do not skew the latin-ratio for non-latin targets.
+
+    Args:
+        translated_text: Text returned by the LLM (placeholders still inline).
+        original_text: Source chunk (placeholders still inline).
+        source_language: Human-readable source language name.
+        target_language: Human-readable target language name.
+        stats: TranslationMetrics to increment on a suspicious finding.
+        log_callback: Optional logger callback.
+        chunk_label: Short identifier used in the warning message (e.g.,
+            "EPUB chunk N" or "refine N").
+        validation_config: Optional pre-loaded config; falls back to env.
+
+    Returns:
+        The ValidationResult so callers (e.g. Phase 3 entry) can react.
+    """
+    from src.common.placeholder_format import PlaceholderFormat
+
+    fmt = PlaceholderFormat.from_config()
+    clean_translated = fmt.remove_all(translated_text) if translated_text else translated_text
+    clean_original = fmt.remove_all(original_text) if original_text else original_text
+
+    result = validate_translation_response(
+        clean_translated,
+        clean_original,
+        source_language,
+        target_language,
+        validation_config,
+    )
+
+    if result.is_suspicious:
+        stats.record_suspicious(result.reason)
+        if log_callback:
+            log_callback(
+                "postvalidation_warning",
+                format_validation_warning(result, chunk_label),
+            )
+
+    return result
 
 
 class PlaceholderManager:
@@ -397,7 +490,15 @@ async def translate_chunk_with_fallback(
     max_retries: int = 1,
     context_manager: Optional[AdaptiveContextManager] = None,
     placeholder_format: Optional[Tuple[str, str]] = None,
-    prompt_options: Optional[Dict] = None
+    prompt_options: Optional[Dict] = None,
+    # Optional fallback provider routing. When fallback_client is
+    # provided AND the post-validation flags the Phase 1 output (or Phase 3
+    # entry is reached), the chunk is re-translated through the fallback
+    # provider. fallback_budget enforces the per-job cap.
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[ValidationConfig] = None,
 ) -> str:
     """
     Translate a chunk with retry mechanism.
@@ -476,6 +577,54 @@ async def translate_chunk_with_fallback(
                 stats.successful_after_retry += 1
                 if log_callback:
                     log_callback("retry_success", f"✓ Translation succeeded after {attempt + 1} attempt(s)")
+
+            # Post-validate the Phase 1 success. If a fallback
+            # provider is configured AND the trigger policy says we should
+            # route this chunk through it, the fallback runs the same prompt
+            # through a second provider (typically Ollama + uncensored local
+            # model) and replaces the result on a clean validation.
+            chunk_label = (
+                f"chunk (global indices {global_indices[:3]}...)"
+                if global_indices else "chunk"
+            )
+            validation = _postvalidate_chunk(
+                translated_text=translated,
+                original_text=chunk_text,
+                source_language=source_language,
+                target_language=target_language,
+                stats=stats,
+                log_callback=log_callback,
+                chunk_label=chunk_label,
+                validation_config=validation_config,
+            )
+
+            if (
+                fallback_client is not None
+                and fallback_budget is not None
+                and fallback_config is not None
+                and should_trigger_fallback(validation, fallback_config)
+            ):
+                used_before = fallback_budget.used
+                fb_translated, _fb_validation = await try_fallback_translation(
+                    original_text=chunk_text,
+                    source_language=source_language,
+                    target_language=target_language,
+                    fallback_client=fallback_client,
+                    budget=fallback_budget,
+                    log_callback=log_callback,
+                    chunk_label=chunk_label,
+                    has_placeholders=bool(local_tag_map),
+                    prompt_options=prompt_options,
+                    placeholder_format=placeholder_format,
+                    validation_config=validation_config,
+                )
+                accepted = fb_translated is not None and (
+                    not local_tag_map
+                    or validate_placeholders(fb_translated, local_tag_map)
+                )
+                if accepted:
+                    translated = fb_translated
+                _apply_fallback_outcome(stats, fallback_budget, used_before, accepted)
 
             result = placeholder_mgr.restore_to_global(translated, global_indices)
             stats.record_processed()  # Mark chunk as fully processed
@@ -560,6 +709,51 @@ async def translate_chunk_with_fallback(
     # ==========================================================================
     # PHASE 3: UNTRANSLATED FALLBACK
     # ==========================================================================
+    # Before giving up, try the fallback provider one last time.
+    # This is the recovery path for chunks where the primary provider
+    # refused completely (no usable text after retries + Phase 2). If the
+    # fallback returns clean text with valid placeholders, we use it.
+    if (
+        fallback_client is not None
+        and fallback_budget is not None
+        and fallback_config is not None
+        and fallback_config.trigger_on_phase3
+    ):
+        chunk_label = (
+            f"phase3 chunk (global indices {global_indices[:3]}...)"
+            if global_indices else "phase3 chunk"
+        )
+        used_before = fallback_budget.used
+        fb_translated, _fb_validation = await try_fallback_translation(
+            original_text=chunk_text,
+            source_language=source_language,
+            target_language=target_language,
+            fallback_client=fallback_client,
+            budget=fallback_budget,
+            log_callback=log_callback,
+            chunk_label=chunk_label,
+            has_placeholders=bool(local_tag_map),
+            prompt_options=prompt_options,
+            placeholder_format=placeholder_format,
+            validation_config=validation_config,
+        )
+        accepted = fb_translated is not None and (
+            not local_tag_map
+            or validate_placeholders(fb_translated, local_tag_map)
+        )
+        _apply_fallback_outcome(stats, fallback_budget, used_before, accepted)
+        if accepted:
+            if log_callback:
+                log_callback(
+                    "phase3_fallback_success",
+                    "✓ Phase 3 rescued by fallback provider - chunk translated.",
+                )
+            result_final = placeholder_mgr.restore_to_global(
+                fb_translated, global_indices
+            )
+            stats.record_processed()
+            return result_final
+
     stats.fallback_used += 1
 
     _log_error(log_callback, "fallback_untranslated",
@@ -700,6 +894,11 @@ async def _translate_all_chunks_with_checkpoint(
     # Global statistics (for EPUB with multiple XHTML files)
     global_total_chunks: Optional[int] = None,
     global_completed_chunks: Optional[int] = None,
+    # Fallback runner plumbing.
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[ValidationConfig] = None,
 ) -> Tuple[List[str], TranslationMetrics, bool]:
     """
     Translate all chunks with checkpoint support.
@@ -824,7 +1023,11 @@ async def _translate_all_chunks_with_checkpoint(
             max_retries=max_retries,
             context_manager=context_manager,
             placeholder_format=placeholder_format,
-            prompt_options=prompt_options
+            prompt_options=prompt_options,
+            fallback_client=fallback_client,
+            fallback_budget=fallback_budget,
+            fallback_config=fallback_config,
+            validation_config=validation_config,
         )
         translated_chunks.append(translated)
 
@@ -901,7 +1104,11 @@ async def _translate_all_chunks(
     log_callback: Optional[Callable] = None,
     stats_callback: Optional[Callable] = None,
     check_interruption_callback: Optional[Callable] = None,
-    prompt_options: Optional[Dict] = None
+    prompt_options: Optional[Dict] = None,
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[ValidationConfig] = None,
 ) -> Tuple[List[str], TranslationMetrics]:
     """Translate all chunks with fallback.
 
@@ -955,7 +1162,11 @@ async def _translate_all_chunks(
             max_retries=max_retries,
             context_manager=context_manager,
             placeholder_format=placeholder_format,
-            prompt_options=prompt_options
+            prompt_options=prompt_options,
+            fallback_client=fallback_client,
+            fallback_budget=fallback_budget,
+            fallback_config=fallback_config,
+            validation_config=validation_config,
         )
         translated_chunks.append(translated)
 
@@ -1288,6 +1499,21 @@ async def _refine_epub_chunks(
                                     f"Chunk {idx + 1}/{total_chunks}: refinement corrupted placeholders, using original translation")
                         refined_chunks.append(translated_text)
                     else:
+                        # Post-validate the refined chunk. Refine
+                        # can refuse on NSFW too ("I cannot polish this
+                        # content...") and on those refusals the model often
+                        # echoes the draft, which would silently downgrade
+                        # quality without any warning.
+                        if stats is not None:
+                            _postvalidate_chunk(
+                                translated_text=refined_text,
+                                original_text=text_for_refinement,
+                                source_language=target_language,
+                                target_language=target_language,
+                                stats=stats,
+                                log_callback=log_callback,
+                                chunk_label=f"refine {idx + 1}/{total_chunks}",
+                            )
                         # Validation passed! Now convert LOCAL indices back to GLOBAL indices
                         refined_with_global_indices = refined_text
                         for local_idx, global_idx in enumerate(global_indices):
@@ -1361,6 +1587,15 @@ async def translate_xhtml_simplified(
     # Global statistics (for EPUB with multiple XHTML files)
     global_total_chunks: Optional[int] = None,
     global_completed_chunks: Optional[int] = None,
+    # Fallback runner threading. When not provided, the function
+    # lazily builds them from env. Callers that translate multiple XHTML
+    # files in one job should pre-build them once and pass them in to share
+    # a single FallbackBudget across files (recommended in
+    # translate_epub_file).
+    fallback_client: Optional[Any] = None,
+    fallback_budget: Optional[Any] = None,
+    fallback_config: Optional[Any] = None,
+    validation_config: Optional[ValidationConfig] = None,
 ) -> Tuple[bool, 'TranslationMetrics']:
     """
     Translate an XHTML document using the simplified approach.
@@ -1402,6 +1637,37 @@ async def translate_xhtml_simplified(
     if max_tokens_per_chunk is None:
         from src.config import MAX_TOKENS_PER_CHUNK
         max_tokens_per_chunk = MAX_TOKENS_PER_CHUNK
+
+    # Lazy-build the fallback runner from env if the caller did
+    # not pass one in. Known limitation in MVP: the budget is per-file when
+    # built here, so a multi-file EPUB can issue up to
+    # FALLBACK_MAX_INVOCATIONS_PER_JOB invocations per file. Callers that
+    # process several files in one job (translate_epub_file) should
+    # pre-build the runner once and pass it down to share a single budget.
+    if fallback_config is None or fallback_client is None or fallback_budget is None:
+        from ..llm.utils.fallback_runner import (
+            FallbackBudget,
+            FallbackConfig,
+            build_fallback_client,
+        )
+        if fallback_config is None:
+            fallback_config = FallbackConfig.from_env()
+        if fallback_client is None and fallback_config.enabled:
+            try:
+                fallback_client = build_fallback_client(fallback_config)
+            except ValueError as exc:
+                # Surface bad config loudly but do not abort the job - the
+                # primary path still works.
+                if log_callback:
+                    log_callback(
+                        "fallback_config_error",
+                        f"❌ Fallback config invalid: {exc}. Primary translation will continue without fallback.",
+                    )
+                fallback_client = None
+        if fallback_budget is None:
+            fallback_budget = FallbackBudget(
+                limit=fallback_config.max_invocations_per_job
+            )
 
     # === RESUME FROM PARTIAL STATE ===
     if resume_state:
@@ -1534,6 +1800,10 @@ async def translate_xhtml_simplified(
         original_chunks=original_chunks,
         global_total_chunks=global_total_chunks,
         global_completed_chunks=global_completed_chunks,
+        fallback_client=fallback_client,
+        fallback_budget=fallback_budget,
+        fallback_config=fallback_config,
+        validation_config=validation_config,
     )
 
     # If interrupted, return without reconstruction

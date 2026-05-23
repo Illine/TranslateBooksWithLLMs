@@ -9,7 +9,7 @@ from src.prompts.prompts import generate_subtitle_block_prompt
 from src.config import TRANSLATE_TAG_IN, TRANSLATE_TAG_OUT
 from .llm_client import create_llm_client
 from .post_processor import clean_translated_text
-from .translator import generate_translation_request, _build_chunk_glossary_block
+from .translator import generate_translation_request, _build_chunk_glossary_block, _txt_postvalidate
 from .epub import TagPreserver
 
 
@@ -95,6 +95,15 @@ async def translate_subtitles(subtitles: List[Dict[str, str]], source_language: 
             if translated_text is not None:
                 # Single point of cleaning for subtitles
                 translations[idx] = clean_translated_text(translated_text)
+                # Surface silent partial refusals on subtitles too.
+                _txt_postvalidate(
+                    translations[idx],
+                    text_to_translate,
+                    source_language,
+                    target_language,
+                    log_callback,
+                    f"SRT subtitle {idx + 1}/{total_subtitles}",
+                )
                 completed_count += 1
             else:
                 # Keep original text if translation fails
@@ -229,6 +238,15 @@ async def refine_subtitle_translations(
                     refined_translations[idx] = refined_text
                     if log_callback:
                         log_callback("srt_subtitle_refined", f"Subtitle {idx + 1}/{total_subtitles} refined successfully")
+                    # Validate the refined subtitle.
+                    _txt_postvalidate(
+                        refined_text,
+                        translated_text,
+                        target_language,
+                        target_language,
+                        log_callback,
+                        f"SRT refine {idx + 1}/{total_subtitles}",
+                    )
                 else:
                     # Fallback to original translation if extraction fails
                     refined_translations[idx] = translated_text
