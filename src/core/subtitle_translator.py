@@ -199,7 +199,7 @@ async def refine_subtitle_translations(
         # keeps the same entity renderings the first pass produced.
         glossary_block = _build_chunk_glossary_block(
             translated_text, prompt_options, log_callback=log_callback,
-            runtime_state=runtime_state,
+            runtime_state=runtime_state, match_target=True,
         )
 
         # Generate refinement prompt

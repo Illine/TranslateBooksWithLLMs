@@ -52,7 +52,7 @@ from .exceptions import (
 )
 from .placeholder_validator import PlaceholderValidator
 from .container import TranslationContainer
-from ..translator import generate_translation_request
+from ..translator import generate_translation_request, _build_chunk_glossary_block
 from ..context_optimizer import AdaptiveContextManager, INITIAL_CONTEXT_SIZE, CONTEXT_STEP, MAX_CONTEXT_SIZE
 from src.config import (
     PLACEHOLDER_PATTERN,
@@ -1172,6 +1172,9 @@ async def _refine_epub_chunks(
 
     total_chunks = len(translated_chunks)
     refined_chunks = []
+    # Transient per-job state for glossary warnings (cap, missing target match);
+    # scoped to this refine call so warnings dedupe per book / per DOCX file.
+    runtime_state: dict = {}
 
     if log_callback:
         log_callback("epub_refinement_info",
@@ -1213,6 +1216,14 @@ async def _refine_epub_chunks(
             text_for_refinement = text_for_refinement.replace(f"__TEMP_PH_{local_idx}__",
                                                               f"{placeholder_format[0]}{local_idx}{placeholder_format[1]}")
 
+        # Filter the glossary against the draft (target language) so refinement
+        # keeps the same entity renderings the first pass produced. Localized
+        # placeholders ([0], [1]...) do not clash with natural target text.
+        glossary_block = _build_chunk_glossary_block(
+            text_for_refinement, prompt_options, log_callback=log_callback,
+            runtime_state=runtime_state, match_target=True,
+        )
+
         # Generate refinement prompt using text with LOCAL indices
         prompt_pair = generate_post_processing_prompt(
             translated_text=text_for_refinement,  # Use localized version
@@ -1222,7 +1233,8 @@ async def _refine_epub_chunks(
             additional_instructions=refinement_instructions,
             has_placeholders=True,
             placeholder_format=placeholder_format,
-            prompt_options=prompt_options
+            prompt_options=prompt_options,
+            glossary_block=glossary_block,
         )
 
         # Make refinement request

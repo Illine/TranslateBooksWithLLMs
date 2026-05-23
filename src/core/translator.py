@@ -37,6 +37,7 @@ def _build_chunk_glossary_block(
     prompt_options: Optional[dict],
     log_callback=None,
     runtime_state: Optional[dict] = None,
+    match_target: bool = False,
 ) -> str:
     """
     Filter the active glossary against the current chunk and render a prompt block.
@@ -50,6 +51,9 @@ def _build_chunk_glossary_block(
     owned by the caller) so it never leaks into the persisted prompt_options
     snapshot. If runtime_state is None, a fresh local dict is used (warning
     won't be deduped across calls — fine for ad-hoc uses).
+
+    Set `match_target=True` for the refine pass: the chunk is then the target
+    draft, and the filter scans for target forms instead of source forms.
     """
     if not prompt_options:
         return ""
@@ -57,11 +61,17 @@ def _build_chunk_glossary_block(
     if not terms:
         return ""
     try:
-        from src.core.glossary import filter_glossary, build_glossary_block, GlossaryConfig
+        from src.core.glossary import (
+            filter_glossary,
+            filter_glossary_by_target,
+            build_glossary_block,
+            GlossaryConfig,
+        )
     except ImportError:
         return ""
     config = prompt_options.get("glossary_config") or GlossaryConfig()
-    filtered, capped = filter_glossary(chunk_content, terms, config)
+    matcher = filter_glossary_by_target if match_target else filter_glossary
+    filtered, capped = matcher(chunk_content, terms, config)
 
     if runtime_state is None:
         runtime_state = {}
@@ -73,6 +83,25 @@ def _build_chunk_glossary_block(
                 "glossary_capped",
                 f"⚠️ Glossary cap reached: more than {config.max_entries} terms matched in a single chunk. "
                 f"Excess entries are dropped — increase `max_entries` if you need full coverage."
+            )
+
+    # Diagnostic: refine pass missed all terms by target-side; check whether the
+    # source-side filter would have matched anything. If yes, the glossary likely
+    # lacks target-side `|`-alternatives for inflected forms. One warning per job.
+    if (
+        match_target
+        and not filtered
+        and log_callback
+        and not runtime_state.get("glossary_target_warned")
+    ):
+        source_filtered, _ = filter_glossary(chunk_content, terms, config)
+        if source_filtered:
+            runtime_state["glossary_target_warned"] = True
+            sample = ", ".join(list(source_filtered.keys())[:3])
+            log_callback(
+                "glossary_target_match_empty",
+                f"⚠️ Refine got empty glossary_block while source-pass would match "
+                f"{len(source_filtered)} terms — target-side alternatives may be missing for: {sample}"
             )
 
     if not filtered:
@@ -885,7 +914,7 @@ async def _make_refinement_request(
     # the first pass are the ones we want to keep stable through refinement.
     glossary_block = _build_chunk_glossary_block(
         draft_translation, prompt_options, log_callback=log_callback,
-        runtime_state=runtime_state,
+        runtime_state=runtime_state, match_target=True,
     )
 
     # Generate refinement prompts

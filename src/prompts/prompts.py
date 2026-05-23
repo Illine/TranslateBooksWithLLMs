@@ -490,6 +490,9 @@ Your job is to REWRITE it with perfect literary {target_language} style.
 - All factual content and meaning
 - Character names and proper nouns
 - Technical terms (if any)
+- Document structure (chapter headings, section breaks, paragraph boundaries)
+- Block-level formatting (blockquotes, lists, dialogue dashes)
+- Source typography (quotation-mark style, em-dash usage)
 {optional_sections}
 {placeholder_section}
 {additional_instructions_section}

@@ -14,6 +14,11 @@ Source terms may declare alternative forms separated by '|' to handle inflected
 languages (e.g. "Москва|Москве|Москвы|Москвой -> Moscou"). The filter matches
 the entry if ANY of the alternatives appears in the chunk; occurrence counts
 are summed across alternatives.
+
+For the refine pass the chunk is the target-language draft rather than the
+source text, so the source-side filter would always miss. `filter_glossary_by_target`
+mirrors `filter_glossary` but matches by the target string (and its `|`-alternatives),
+returning the same `{source: target}` mapping for downstream rendering.
 """
 import re
 from typing import Dict, List, Tuple
@@ -118,6 +123,71 @@ def filter_glossary(
         )
         # Preserve the original length-desc order in the output so the
         # rendered block stays predictable for the LLM.
+        matched = [(s, t, c) for s, t, c in matched if (s, t) in kept]
+
+    return {s: t for s, t, _ in matched}, capped
+
+
+def filter_glossary_by_target(
+    chunk: str,
+    glossary_terms: Dict[str, str],
+    config: GlossaryConfig = None,
+) -> Tuple[Dict[str, str], bool]:
+    """
+    Return only the glossary entries whose target form appears in the chunk.
+
+    Mirror of `filter_glossary` for the refine pass: the chunk is the
+    translated draft, so we match the dict value (target) instead of the key.
+    Target values may declare alternative inflected forms separated by '|'
+    (e.g. "Волдеморт|Волдеморта|Волдеморту") - useful for inflected target
+    languages like Russian.
+
+    Args:
+        chunk: The target-language draft to scan.
+        glossary_terms: {source_term: target_term}. Target may declare
+            alternative inflected forms separated by '|'.
+        config: GlossaryConfig (max_entries cap, case sensitivity).
+
+    Returns:
+        (filtered_terms, capped) where filtered_terms is the same
+        `{source: target}` mapping (unchanged keys/values, just filtered),
+        preserving longest-target-first order so overlapping target forms
+        render predictably.
+    """
+    if not chunk or not glossary_terms:
+        return {}, False
+
+    config = config or GlossaryConfig()
+    flags = 0 if config.case_sensitive else re.IGNORECASE
+
+    sorted_terms = sorted(
+        glossary_terms.items(),
+        key=lambda kv: _max_alt_length(kv[1]),
+        reverse=True,
+    )
+
+    matched: List[Tuple[str, str, int]] = []
+    haystack = chunk if config.case_sensitive else chunk.lower()
+
+    for source, target in sorted_terms:
+        alternatives = _split_alternatives(target)
+        if not alternatives:
+            continue
+
+        total_count = sum(
+            _count_alternative(alt, chunk, haystack, flags, config.case_sensitive)
+            for alt in alternatives
+        )
+        if total_count > 0:
+            matched.append((source, target, total_count))
+
+    capped = False
+    if config.max_entries and len(matched) > config.max_entries:
+        capped = True
+        kept = set(
+            (s, t) for s, t, _ in
+            sorted(matched, key=lambda x: (x[2], _max_alt_length(x[1])), reverse=True)[: config.max_entries]
+        )
         matched = [(s, t, c) for s, t, c in matched if (s, t) in kept]
 
     return {s: t for s, t, _ in matched}, capped

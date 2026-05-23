@@ -22,7 +22,8 @@ tests/.placeholder_tests/
 .telemetry/
 /plan/
 /experiments
-/tests
+/tests/*
+!/tests/glossary/
 /benchmark_results/
 /[Dd]ebug/
 

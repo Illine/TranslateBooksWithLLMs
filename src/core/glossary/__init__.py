@@ -13,7 +13,7 @@ from src.core.glossary.models import (
     GlossaryConfig,
     GlossaryTerm,
 )
-from src.core.glossary.filter import filter_glossary
+from src.core.glossary.filter import filter_glossary, filter_glossary_by_target
 from src.core.glossary.injector import build_glossary_block
 from src.core.glossary.store import GlossaryStore
 from src.core.glossary.ner import parse_ner_response, suggest_terms
@@ -25,6 +25,7 @@ __all__ = [
     "GlossaryConfig",
     "GlossaryStore",
     "filter_glossary",
+    "filter_glossary_by_target",
     "build_glossary_block",
     "parse_ner_response",
     "suggest_terms",

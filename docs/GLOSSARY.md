@@ -419,6 +419,17 @@ If a chunk matches more than 50 entries (rare but possible in dense reference wo
 
 This means the most useful entries (frequent, long, specific) survive the cap.
 
+### Refine pass (Polish / 2nd pass)
+
+The refine pass runs on the **target-language draft**, not the source text, so the source-side scan would miss whenever the draft uses target-language script for the term (the common case for Latin->Cyrillic and other non-overlapping script pairs). Refine therefore matches the **target form** in the chunk:
+
+- For inflected target languages (Russian, German, Polish, ...) declare the inflected forms on the **target** side separated by `|`, e.g. `Voldemort -> Волдеморт|Волдеморта|Волдеморту|Волдемортом`. Any of the alternatives triggers the entry, just like the source-side `|` convention.
+- Word-boundary and CJK substring rules apply to the target form.
+- The rendered block is still `source -> target` (target is shown as you wrote it, `|`-alternatives included), so the model sees the same canonical rule it saw on the first pass.
+- If the refine pass receives an **empty** glossary block but the source-side filter would have matched, a one-time per-job WARN (`glossary_target_match_empty`) is logged. It usually means the target side lacks inflected alternatives - add them and re-run.
+
+EPUB, DOCX, SRT and TXT refine paths all share this filter.
+
 ---
 
 ## Auto-extract reference
