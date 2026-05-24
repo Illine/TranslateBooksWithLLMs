@@ -7,6 +7,7 @@ Solutions to common problems with TranslateBookWithLLM.
 ## Table of Contents
 
 - [Connection Issues](#connection-issues)
+- [Model Refusals & Fallback Provider](#model-refusals--fallback-provider)
 - [Model Issues](#model-issues)
 - [Performance Issues](#performance-issues)
 - [Thinking Models](#thinking-models)
@@ -46,6 +47,7 @@ Solutions to common problems with TranslateBookWithLLM.
 4. Check the correct environment variable is set:
    - Gemini: `GEMINI_API_KEY`
    - OpenAI: `OPENAI_API_KEY`
+   - Anthropic: `ANTHROPIC_API_KEY`
    - OpenRouter: `OPENROUTER_API_KEY`
    - Mistral: `MISTRAL_API_KEY`
    - DeepSeek: `DEEPSEEK_API_KEY`
@@ -61,6 +63,37 @@ Solutions to common problems with TranslateBookWithLLM.
 2. The system will automatically retry with exponential backoff
 3. Consider using a local model (Ollama) for large files
 4. Check your API plan limits
+
+---
+
+## Model Refusals & Fallback Provider
+
+### "N suspicious chunks" in the translation summary
+
+**Cause**: Post-validation (`RESPONSE_VALIDATION_*`) flagged some chunks as suspicious — typically a partial refusal from the model, an echoed source text, or output with too many latin characters for a non-latin target language. This is informational; the chunks were kept in the output as-is unless a fallback provider was configured.
+
+**Solutions**:
+1. Inspect the flagged chunks in the output file and decide whether to re-translate manually.
+2. Configure a fallback provider in `.env` so flagged chunks are automatically re-translated through it. See [PROVIDERS.md → Fallback Provider](PROVIDERS.md#fallback-provider).
+3. If the warnings are false positives (e.g. the source has many proper names in latin), raise `RESPONSE_VALIDATION_LATIN_THRESHOLD` from `0.15` to `0.20-0.25`, or disable echo detection with `RESPONSE_VALIDATION_ECHO_ENABLED=false`.
+
+### "Fallback returned empty content" / fallback budget exhausted
+
+**Cause**: The configured fallback provider also failed on a chunk, or `FALLBACK_MAX_INVOCATIONS_PER_JOB` was reached.
+
+**Solutions**:
+1. Check the fallback provider is reachable (e.g. for Ollama: `curl http://localhost:11434/api/tags`; for cloud: verify the API key).
+2. For NSFW content with Ollama fallback, ensure the local model can handle explicit text (qwen3:14b works; smaller censored models may also refuse).
+3. Raise `FALLBACK_MAX_INVOCATIONS_PER_JOB` if you legitimately need more re-translations per job, or accept the cap as cost protection.
+
+### Refusals from the primary provider on every chunk
+
+**Cause**: Safety filter on the primary provider is too strict for the content (e.g. Gemini's internal NSFW filter on explicit fiction, OpenAI on certain technical excerpts).
+
+**Solutions**:
+1. Loosen the safety threshold where the provider exposes one (e.g. `GEMINI_SAFETY_THRESHOLD=BLOCK_NONE` if supported by your key).
+2. Switch the primary provider to one without internal censorship for that content type — DeepSeek for technical material, local Ollama for NSFW.
+3. Combine the above with a fallback provider — see [PROVIDERS.md → Fallback Provider](PROVIDERS.md#fallback-provider).
 
 ---
 

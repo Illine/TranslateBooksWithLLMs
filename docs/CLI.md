@@ -38,7 +38,7 @@ python translate.py -i input_file -o output_file
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-m, --model` | Model name | qwen3:14b |
-| `--provider` | ollama / openrouter / openai / gemini / mistral / deepseek / poe / nim | ollama |
+| `--provider` | ollama / openrouter / openai / anthropic / gemini / mistral / deepseek / poe / nim | ollama |
 | `--api_endpoint` | API URL | http://localhost:11434/api/generate |
 
 ### API Keys
@@ -51,6 +51,7 @@ python translate.py -i input_file -o output_file
 |--------|-------------|
 | `--openrouter_api_key` | OpenRouter API key |
 | `--openai_api_key` | OpenAI API key (cloud only — not needed for local servers) |
+| `--anthropic_api_key` | Anthropic API key — get one at [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | `--gemini_api_key` | Google Gemini API key |
 | `--mistral_api_key` | Mistral API key |
 | `--deepseek_api_key` | DeepSeek API key |
@@ -120,6 +121,12 @@ python translate.py -i book.txt -o book_fr.txt \
     --provider openai \
     --openai_api_key sk-xxx \
     -m gpt-4o
+
+# Anthropic (native, with prompt caching)
+python translate.py -i book.txt -o book_fr.txt \
+    --provider anthropic \
+    --anthropic_api_key sk-ant-xxx \
+    -m claude-sonnet-4-6
 
 # Gemini
 python translate.py -i book.txt -o book_fr.txt \
@@ -199,6 +206,8 @@ API_ENDPOINT=http://localhost:11434/api/generate
 # API Keys (any of these accepts comma-separated values for rotation)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_PROMPT_CACHING=true
 GEMINI_API_KEY=...
 MISTRAL_API_KEY=...
 DEEPSEEK_API_KEY=...

@@ -49,6 +49,7 @@ That's it. On first launch, you choose a translation provider:
 <a href="https://poe.com/"><img src="src/web/static/img/providers/poe.png" alt="Poe" height="32"></a>&nbsp;&nbsp;
 <a href="https://openrouter.ai/"><img src="src/web/static/img/providers/openrouter.png" alt="OpenRouter" height="32"></a>&nbsp;&nbsp;
 <a href="https://openai.com/"><img src="src/web/static/img/providers/openai.png" alt="OpenAI" height="32"></a>&nbsp;&nbsp;
+<a href="https://www.anthropic.com/"><img src="src/web/static/img/providers/anthropic.png" alt="Anthropic" height="32"></a>&nbsp;&nbsp;
 <a href="https://mistral.ai/"><img src="src/web/static/img/providers/mistral.png" alt="Mistral" height="32"></a>&nbsp;&nbsp;
 <a href="https://www.deepseek.com/"><img src="src/web/static/img/providers/deepseek.png" alt="DeepSeek" height="32"></a>&nbsp;&nbsp;
 <a href="https://deepmind.google/technologies/gemini/"><img src="src/web/static/img/providers/gemini.png" alt="Gemini" height="32"></a>&nbsp;&nbsp;
@@ -62,6 +63,7 @@ That's it. On first launch, you choose a translation provider:
 | **OpenAI-Compatible** | Local (llama.cpp, LM Studio, vLLM, LocalAI...) | Point to your server's endpoint |
 | **OpenRouter** | Cloud (200+ models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | **OpenAI** | Cloud | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Anthropic** | Cloud (native, prompt caching) | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **Mistral** | Cloud | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | **DeepSeek** | Cloud | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
 | **Gemini** | Cloud | [Google AI Studio](https://aistudio.google.com/apikey) |
@@ -120,6 +122,10 @@ python translate.py -i book.txt --provider openrouter \
 python translate.py -i book.txt --provider openai \
     --openai_api_key YOUR_KEY -m gpt-4o -tl French
 
+# With Anthropic (native, with prompt caching)
+python translate.py -i book.txt --provider anthropic \
+    --anthropic_api_key YOUR_KEY -m claude-sonnet-4-6 -tl French
+
 # With Gemini
 python translate.py -i book.txt --provider gemini \
     --gemini_api_key YOUR_KEY -m gemini-2.0-flash -tl French
@@ -143,6 +149,9 @@ python translate.py -i book.txt --provider nim \
 # With local OpenAI-compatible server (llama.cpp, LM Studio, vLLM, etc.)
 python translate.py -i book.txt --provider openai \
     --api_endpoint http://localhost:8080/v1/chat/completions -m your-model -tl French
+
+# PDF input (converted to EPUB output via PyMuPDF, then translated)
+python translate.py -i book.pdf -tl French
 ```
 
 ### Main options
@@ -154,7 +163,7 @@ python translate.py -i book.txt --provider openai \
 | `-sl, --source_lang` | Source language | English |
 | `-tl, --target_lang` | Target language | Chinese |
 | `-m, --model` | Model name | qwen3:14b |
-| `--provider` | ollama/openrouter/openai/gemini/mistral/deepseek/poe/nim | ollama |
+| `--provider` | ollama/openrouter/openai/anthropic/gemini/mistral/deepseek/poe/nim | ollama |
 | `--text-cleanup` | OCR/typographic cleanup | disabled |
 | `--refine` | Second pass for literary polish | disabled |
 | `--tts` | Generate audio (Edge-TTS) | disabled |
@@ -179,6 +188,8 @@ DEFAULT_MODEL=qwen3:14b
 # API Keys (if using cloud providers)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_PROMPT_CACHING=true   # 2-3x savings on input tokens for long books
 GEMINI_API_KEY=...
 MISTRAL_API_KEY=...
 DEEPSEEK_API_KEY=...
@@ -214,7 +225,8 @@ See [docs/DOCKER.md](docs/DOCKER.md) for more options.
 
 | Guide | Description |
 |-------|-------------|
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Detailed provider setup (Ollama, LM Studio, OpenRouter, OpenAI, Gemini) |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Detailed provider setup (Ollama, LM Studio, OpenRouter, OpenAI, Anthropic, Gemini), plus fallback provider configuration |
+| [docs/PDF_INPUT.md](docs/PDF_INPUT.md) | PDF input format (PyMuPDF parsing, conversion to EPUB output, limitations) |
 | [docs/API_KEY_ROTATION.md](docs/API_KEY_ROTATION.md) | Use multiple API keys per provider with automatic failover on rate-limit |
 | [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | Webhook notifications on completion (ntfy, gotify, Discord, Slack, custom) |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Force consistent term translations across a book (Web UI + CLI, auto-extract via NER) |

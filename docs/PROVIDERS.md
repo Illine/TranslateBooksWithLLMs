@@ -157,6 +157,42 @@ python translate.py -i book.txt -o book_fr.txt \
 
 ---
 
+## Anthropic (Cloud)
+
+Native Claude API integration with prompt caching. Different from accessing Claude through OpenRouter or Poe: this provider talks to `api.anthropic.com` directly and wraps the system prompt in `cache_control` so Anthropic's prompt caching kicks in. On a long book this typically gives a 2-3x net saving on input tokens.
+
+### Models
+
+- `claude-sonnet-4-6` — best price/quality balance, recommended default
+- `claude-opus-4-7` — highest quality, more expensive
+- `claude-haiku-4-5` — cheapest, fast
+
+### Setup
+
+1. Get API key at [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+2. In TBL: Select "Anthropic", enter your key
+3. Or set in `.env`:
+
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-6
+ANTHROPIC_PROMPT_CACHING=true   # default; set to false only for debugging
+```
+
+### CLI Example
+
+```bash
+python translate.py -i book.txt -o book_fr.txt \
+    --provider anthropic \
+    --anthropic_api_key sk-ant-... \
+    -m claude-sonnet-4-6
+```
+
+Pricing: [anthropic.com/pricing](https://www.anthropic.com/pricing)
+
+---
+
 ## Mistral (Cloud)
 
 European cloud provider with strong multilingual quality.
@@ -260,6 +296,64 @@ Browse models: [build.nvidia.com](https://build.nvidia.com/)
 
 ---
 
+## Fallback Provider
+
+When the primary provider returns a refusal (full or partial), echoes the input, produces output with too many latin characters for a non-latin target, or fails completely after retries and token alignment, the runner re-translates that chunk through a **second provider**. This is designed for cases where the primary occasionally refuses chunks even with safety thresholds at their loosest setting — typically NSFW fiction translated by cloud providers, but also useful for obscure technical text.
+
+Two layers work together:
+
+- **Post-validation** (`RESPONSE_VALIDATION_*`) — detects suspicious chunks (latin-ratio overshoot, echoed source, refusal phrases). Always runs, costs nothing extra.
+- **Fallback runner** (`FALLBACK_*`) — re-translates the flagged chunks through the configured fallback provider. Optional; leave `FALLBACK_PROVIDER` empty to keep only the warnings.
+
+### Setup
+
+In `.env`:
+
+```bash
+FALLBACK_PROVIDER=ollama          # or deepseek, anthropic, gemini, etc.
+FALLBACK_MODEL=qwen3:14b
+FALLBACK_API_KEY=                 # required only for cloud fallbacks
+FALLBACK_MAX_INVOCATIONS_PER_JOB=100   # hard cap on cost in worst case
+FALLBACK_TRIGGER_ON_PHASE3=true        # fallback when primary completely fails
+FALLBACK_TRIGGER_ON_SUSPICIOUS=true    # fallback when post-validation flags the output
+```
+
+### Recommended presets
+
+**NSFW fiction.** Primary Gemini Flash 3.5 (fast, cheap, good multilingual), fallback to local Ollama with `qwen3:14b` on a workstation. Gemini's internal safety filter strips a small percentage of explicit chunks regardless of `GEMINI_SAFETY_THRESHOLD`; the local model picks them up.
+
+```bash
+LLM_PROVIDER=gemini
+DEFAULT_MODEL=gemini-2.5-flash
+FALLBACK_PROVIDER=ollama
+FALLBACK_MODEL=qwen3:14b
+OLLAMA_HOST=http://192.168.x.x:11434
+FALLBACK_MAX_INVOCATIONS_PER_JOB=200
+```
+
+**Technical books / universal safety net.** Primary Anthropic/Gemini/OpenAI, fallback DeepSeek. Cheap, no censorship on technical content, useful when the primary occasionally refuses obscure excerpts.
+
+```bash
+FALLBACK_PROVIDER=deepseek
+FALLBACK_MODEL=deepseek-chat
+FALLBACK_API_KEY=sk-...
+FALLBACK_MAX_INVOCATIONS_PER_JOB=100
+```
+
+### Post-validation tuning
+
+```bash
+RESPONSE_VALIDATION_ENABLED=true
+RESPONSE_VALIDATION_LATIN_THRESHOLD=0.15   # raise to 0.20-0.25 for books with many english names; lower to 0.05-0.10 for strict literary work
+RESPONSE_VALIDATION_ECHO_ENABLED=true      # turn off only when source and target language match (e.g. polish/refine on same language)
+```
+
+The translation summary at the end of the job reports how many chunks were flagged and how many were successfully re-translated via fallback.
+
+> Known limitation: the draft-mode pipeline and Phase 2 token-alignment success path currently bypass post-validation. Suspicious chunks produced there are not routed to fallback.
+
+---
+
 ## API Key Rotation
 
 Every cloud provider above accepts a comma-separated list of keys (e.g. `key1,key2,key3`). The system automatically rotates keys on HTTP 429 — useful for chaining free-tier accounts. See [API_KEY_ROTATION.md](API_KEY_ROTATION.md) for details.
@@ -277,13 +371,31 @@ LLM_PROVIDER=ollama
 # API Keys (each accepts comma-separated values for automatic rotation)
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 GEMINI_API_KEY=...
 MISTRAL_API_KEY=...
 DEEPSEEK_API_KEY=...
 POE_API_KEY=...
 NIM_API_KEY=...
 
+# Anthropic-specific
+ANTHROPIC_MODEL=claude-sonnet-4-6
+ANTHROPIC_PROMPT_CACHING=true     # 2-3x savings on input tokens for long books
+
 # Ollama settings
 API_ENDPOINT=http://localhost:11434/api/generate
 DEFAULT_MODEL=qwen3:14b
+
+# Fallback provider (optional, see "Fallback Provider" section above)
+FALLBACK_PROVIDER=
+FALLBACK_MODEL=
+FALLBACK_API_KEY=
+FALLBACK_MAX_INVOCATIONS_PER_JOB=100
+FALLBACK_TRIGGER_ON_PHASE3=true
+FALLBACK_TRIGGER_ON_SUSPICIOUS=true
+
+# Post-validation (optional, see "Fallback Provider" section above)
+RESPONSE_VALIDATION_ENABLED=true
+RESPONSE_VALIDATION_LATIN_THRESHOLD=0.15
+RESPONSE_VALIDATION_ECHO_ENABLED=true
 ```
