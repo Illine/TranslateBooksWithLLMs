@@ -89,13 +89,15 @@ export function generateOutputFilename(file, pattern, overrides = {}) {
 /**
  * Detect file type from extension
  * @param {string} filename - Filename
- * @returns {string} File type ('txt', 'epub', 'srt')
+ * @returns {string} File type ('txt', 'epub', 'srt', 'docx', 'pdf')
  */
 function detectFileType(filename) {
     const extension = filename.split('.').pop().toLowerCase();
 
     if (extension === 'epub') return 'epub';
     if (extension === 'srt') return 'srt';
+    if (extension === 'docx') return 'docx';
+    if (extension === 'pdf') return 'pdf';
     return 'txt';
 }
 
@@ -858,8 +860,8 @@ export const FileUpload = {
                 const iconContainer = document.createElement('span');
                 iconContainer.className = 'file-icon';
 
-                if (file.fileType === 'epub' && file.thumbnail) {
-                    // Show thumbnail
+                if ((file.fileType === 'epub' || file.fileType === 'pdf') && file.thumbnail) {
+                    // Show thumbnail (EPUB cover or first-page PDF render)
                     const img = document.createElement('img');
                     img.src = `/api/thumbnails/${encodeURIComponent(file.thumbnail)}`;
                     img.alt = 'Cover';
@@ -867,7 +869,7 @@ export const FileUpload = {
 
                     // Fallback to generic SVG on error
                     img.onerror = () => {
-                        iconContainer.innerHTML = this._createGenericEPUBIcon();
+                        iconContainer.innerHTML = this._getFileIcon(file.fileType);
                     };
 
                     iconContainer.appendChild(img);
@@ -1003,12 +1005,16 @@ export const FileUpload = {
 
     /**
      * Get file icon based on file type
-     * @param {string} fileType - File type ('txt', 'epub', 'srt')
+     * @param {string} fileType - File type ('txt', 'epub', 'srt', 'docx', 'pdf')
      * @returns {string} HTML string for icon
      */
     _getFileIcon(fileType) {
         if (fileType === 'epub') {
             return this._createGenericEPUBIcon();
+        } else if (fileType === 'pdf') {
+            return '📕';
+        } else if (fileType === 'docx') {
+            return '📝';
         } else if (fileType === 'srt') {
             return '🎬';
         }

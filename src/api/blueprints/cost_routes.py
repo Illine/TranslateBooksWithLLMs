@@ -205,6 +205,9 @@ def _extract_text_for_estimation(file_path: Path) -> str:
     if suffix == '.docx':
         return _extract_docx_text(file_path)
 
+    if suffix == '.pdf':
+        return _extract_pdf_text(file_path)
+
     try:
         return file_path.read_text(encoding='utf-8', errors='replace')
     except OSError:
@@ -245,4 +248,31 @@ def _extract_docx_text(file_path: Path) -> str:
         return '\n\n'.join(p.text for p in doc.paragraphs if p.text and p.text.strip())
     except Exception as e:
         logger.warning("Failed to extract DOCX text from %s: %s", file_path, e)
+        return ''
+
+
+def _extract_pdf_text(file_path: Path) -> str:
+    """Extract plain text from PDF for token counting.
+
+    Uses pymupdf's fast page.get_text() — accuracy isn't critical for
+    estimation, speed and a non-binary result are. Returns '' for
+    image-only PDFs (no extractable text) so the caller reports no_content
+    instead of charging the user for binary garbage.
+    """
+    try:
+        import pymupdf
+    except ImportError as e:
+        logger.warning("pymupdf not available for PDF estimation: %s", e)
+        return ''
+
+    try:
+        chunks = []
+        with pymupdf.open(str(file_path)) as doc:
+            for page in doc:
+                text = page.get_text()
+                if text and text.strip():
+                    chunks.append(text)
+        return '\n\n'.join(chunks)
+    except Exception as e:
+        logger.warning("Failed to extract PDF text from %s: %s", file_path, e)
         return ''

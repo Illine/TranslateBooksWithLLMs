@@ -72,6 +72,8 @@ def create_security_blueprint(output_dir):
                 file_type = "srt"
             elif original_filename.endswith('.docx'):
                 file_type = "docx"
+            elif original_filename.endswith('.pdf'):
+                file_type = "pdf"
             else:
                 file_type = "txt"
 
@@ -79,10 +81,15 @@ def create_security_blueprint(output_dir):
             file_size = len(file_data)
             secure_path = validation_result.file_path
 
-            # Detect source language from file content
-            detected_language, confidence = LanguageDetector.detect_language_from_file(
-                file_data, file.filename
-            )
+            # Detect source language from file content. For PDFs we postpone
+            # detection until after prepare_pdf_for_upload extracted a sample
+            # in the single fitz.open below - skips reopening the document.
+            if file_type == "pdf":
+                detected_language, confidence = None, 0.0
+            else:
+                detected_language, confidence = LanguageDetector.detect_language_from_file(
+                    file_data, file.filename
+                )
 
             # Extract cover for EPUB files
             thumbnail_filename = None
@@ -105,6 +112,38 @@ def create_security_blueprint(output_dir):
                 except Exception as e:
                     current_app.logger.warning(f"Failed to extract EPUB cover: {e}")
                     # Continue without thumbnail (graceful degradation)
+
+            # PDF: single fitz open that validates image-only, samples text
+            # for language detection, and renders the cover thumbnail.
+            elif file_type == "pdf":
+                from src.core.pdf.cover_extractor import (
+                    ImageOnlyPdfError,
+                    prepare_pdf_for_upload,
+                )
+                from src.utils.language_detector import LanguageDetector
+
+                thumbnails_dir = Path(output_dir) / 'thumbnails'
+                try:
+                    summary = prepare_pdf_for_upload(str(secure_path), thumbnails_dir)
+                except ImageOnlyPdfError as e:
+                    secure_path.unlink(missing_ok=True)
+                    return jsonify({
+                        "error": str(e),
+                        "details": "PDF appears to be image-only (scanned). "
+                                   "OCR is not supported; please provide a "
+                                   "text-based PDF.",
+                    }), 400
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to process PDF upload: {e}")
+                    summary = None
+
+                if summary:
+                    thumbnail_filename = summary.thumbnail_filename
+                    if thumbnail_filename:
+                        current_app.logger.info(f"Extracted PDF cover: {thumbnail_filename}")
+                    detected_language, confidence = LanguageDetector.detect_language_from_text(
+                        summary.sample_text
+                    )
 
             # Return success response
             response_data = {

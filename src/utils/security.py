@@ -38,7 +38,7 @@ class SecureFileHandler:
     # The system will detect the actual content type for unknown extensions
     ALLOWED_EXTENSIONS: Set[str] = {
         # Primary supported formats (with dedicated processors)
-        '.txt', '.epub', '.srt', '.docx',
+        '.txt', '.epub', '.srt', '.docx', '.pdf',
         # Common text file extensions (will be processed as plain text)
         '.text', '.log', '.md', '.markdown', '.rst', '.asc',
         # Configuration/data files (text-based, can be translated)
@@ -69,6 +69,7 @@ class SecureFileHandler:
         'application/x-subrip',  # SRT files
         'text/srt',  # Alternative MIME type for SRT
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  # DOCX files
+        'application/pdf',  # PDF files
         # Additional text MIME types
         'text/markdown',
         'text/x-markdown',
@@ -286,6 +287,7 @@ class SecureFileHandler:
                 '.epub': self._validate_epub_file,
                 '.srt': self._validate_srt_file,
                 '.docx': self._validate_docx_file,
+                '.pdf': self._validate_pdf_file,
             }
 
             # Check if we have a dedicated validator for this extension
@@ -304,6 +306,8 @@ class SecureFileHandler:
                 return self._validate_epub_file(file_path)
             elif detected_type == 'docx':
                 return self._validate_docx_file(file_path)
+            elif detected_type == 'pdf':
+                return self._validate_pdf_file(file_path)
             elif detected_type == 'srt':
                 return self._validate_srt_file(file_path)
             elif detected_type == 'txt':
@@ -555,6 +559,28 @@ class SecureFileHandler:
             return FileValidationResult(
                 is_valid=False,
                 error_message=f"DOCX validation failed: {str(e)}"
+            )
+
+    def _validate_pdf_file(self, file_path: Path) -> FileValidationResult:
+        """Validate PDF file by magic bytes.
+
+        Image-only detection (scanned PDFs without extractable text) is
+        applied at the upload route level via validate_pdf_is_translatable -
+        we keep this validator focused on cheap structural checks.
+        """
+        try:
+            with open(file_path, "rb") as f:
+                header = f.read(5)
+            if header[:5] != b"%PDF-":
+                return FileValidationResult(
+                    is_valid=False,
+                    error_message="PDF file is missing the '%PDF-' magic header.",
+                )
+            return FileValidationResult(is_valid=True, warnings=[])
+        except Exception as e:
+            return FileValidationResult(
+                is_valid=False,
+                error_message=f"PDF validation failed: {str(e)}",
             )
 
     def _cleanup_temp_file(self, temp_path: Path) -> None:

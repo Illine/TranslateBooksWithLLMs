@@ -15,7 +15,7 @@ import zipfile
 from typing import Literal, Optional, Tuple
 from pathlib import Path
 
-FileType = Literal["txt", "epub", "srt", "docx"]
+FileType = Literal["txt", "epub", "srt", "docx", "pdf"]
 
 # Known text file extensions that should be treated as plain text
 KNOWN_TEXT_EXTENSIONS = {
@@ -28,7 +28,8 @@ KNOWN_TEXT_EXTENSIONS = {
 PROCESSOR_EXTENSIONS = {
     '.epub': 'epub',
     '.srt': 'srt',
-    '.docx': 'docx'
+    '.docx': 'docx',
+    '.pdf': 'pdf',
 }
 
 
@@ -43,7 +44,7 @@ def detect_file_type(file_path: str) -> FileType:
         file_path: Path to the file
 
     Returns:
-        File type as string ('txt', 'epub', 'srt', 'docx')
+        File type as string ('txt', 'epub', 'srt', 'docx', 'pdf')
 
     Raises:
         ValueError: If file type cannot be determined or is not supported
@@ -70,7 +71,7 @@ def detect_file_type(file_path: str) -> FileType:
     # Could not determine type
     raise ValueError(
         f"Cannot determine file type for: {ext}. "
-        f"Supported types: .txt, .epub, .srt, .docx, "
+        f"Supported types: .txt, .epub, .srt, .docx, .pdf, "
         f"or plain text files with any extension."
     )
 
@@ -120,6 +121,10 @@ def _detect_binary_format(file_path: str) -> Optional[FileType]:
 
         if len(header) < 4:
             return None
+
+        # PDF magic bytes: %PDF-
+        if header[:5] == b'%PDF-':
+            return 'pdf'
 
         # ZIP-based formats (EPUB, DOCX, ODT are all ZIP archives)
         # ZIP magic bytes: PK\x03\x04 or PK\x05\x06 (empty) or PK\x07\x08 (spanned)

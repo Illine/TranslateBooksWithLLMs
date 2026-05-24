@@ -213,17 +213,54 @@ async def translate_file(
         )
         return result.get('success', False)
 
+    # PDF input - convert to HTML, translate via generic pipeline, package
+    # the result as EPUB. Output extension is forced to .epub.
+    if detected_type == 'pdf':
+        from src.core.pdf.translator import translate_pdf_file
+        from src.core.llm import create_llm_provider
+
+        llm_client = create_llm_provider(
+            provider_type=llm_provider,
+            endpoint=llm_api_endpoint,
+            model=model_name,
+            gemini_api_key=gemini_api_key,
+            openai_api_key=openai_api_key,
+            openrouter_api_key=openrouter_api_key,
+            mistral_api_key=mistral_api_key,
+            deepseek_api_key=deepseek_api_key,
+            anthropic_api_key=anthropic_api_key,
+            poe_api_key=poe_api_key
+        )
+
+        result = await translate_pdf_file(
+            input_filepath=input_filepath,
+            output_filepath=output_filepath,
+            source_language=source_language,
+            target_language=target_language,
+            model_name=model_name,
+            llm_client=llm_client,
+            max_tokens_per_chunk=context_window or 450,
+            log_callback=log_callback,
+            stats_callback=stats_callback,
+            prompt_options=prompt_options,
+            max_retries=1,
+            context_manager=None,
+            check_interruption_callback=check_interruption_callback,
+        )
+        return result.get('success', False)
+
     # Map detected file types to adapters
     adapter_map = {
         'txt': TxtAdapter,
         'srt': SrtAdapter,
         # Note: 'epub' uses legacy path above
         # Note: 'docx' uses legacy path above
+        # Note: 'pdf' uses dedicated path above
     }
 
     adapter_class = adapter_map.get(detected_type)
     if not adapter_class:
-        supported = ', '.join(['txt', 'srt', 'epub', 'docx'])
+        supported = ', '.join(['txt', 'srt', 'epub', 'docx', 'pdf'])
         raise UnsupportedFormatError(
             f"Unsupported file format: {detected_type}. Supported formats: {supported}"
         )

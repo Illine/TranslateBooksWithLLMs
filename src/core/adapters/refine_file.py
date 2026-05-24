@@ -161,6 +161,14 @@ async def refine_file(
             prompt_options=prompt_options,
         )
 
+    if detected_type == 'pdf':
+        from src.core.pdf.exceptions import PdfRefineNotSupportedError
+
+        raise PdfRefineNotSupportedError(
+            "PDF refine-only is not supported. PDF translation produces an "
+            "EPUB output; refine that EPUB instead."
+        )
+
     supported = ', '.join(['txt', 'epub', 'srt', 'docx'])
     raise UnsupportedFormatError(
         f"Unsupported file format for refine-only: {detected_type}. "

@@ -6,7 +6,7 @@ for fast and accurate language identification from text content.
 """
 import re
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from langdetect import detect, detect_langs, LangDetectException
 from lxml import etree
 
@@ -109,6 +109,32 @@ class LanguageDetector:
             return ""
 
     @staticmethod
+    def _extract_text_from_pdf(file_data: bytes) -> str:
+        """Extract a text sample from a PDF for language detection.
+
+        Walks the first few pages via PyMuPDF and concatenates their text.
+        Returns "" on any failure so the caller falls back to the default
+        no-detection behaviour.
+        """
+        try:
+            import pymupdf
+
+            doc = pymupdf.open(stream=file_data, filetype="pdf")
+            try:
+                parts: List[str] = []
+                # Cap at 10 pages - more than enough for langdetect and keeps
+                # the cost predictable for large books.
+                for page in doc[: min(doc.page_count, 10)]:
+                    text = page.get_text("text")
+                    if text:
+                        parts.append(text)
+                return "\n".join(parts)
+            finally:
+                doc.close()
+        except Exception:
+            return ""
+
+    @staticmethod
     def _extract_text_from_srt(file_data: bytes) -> str:
         """
         Extract readable text from SRT subtitle file
@@ -202,6 +228,8 @@ class LanguageDetector:
                 text = LanguageDetector._extract_text_from_epub(file_data)
             elif filename_lower.endswith('.srt'):
                 text = LanguageDetector._extract_text_from_srt(file_data)
+            elif filename_lower.endswith('.pdf'):
+                text = LanguageDetector._extract_text_from_pdf(file_data)
             else:
                 # Plain text file
                 # Try common encodings
@@ -214,16 +242,28 @@ class LanguageDetector:
                 else:
                     return None, 0.0
 
-            # Clean and prepare text
-            text = LanguageDetector._clean_text_for_detection(text)
+            return LanguageDetector.detect_language_from_text(text, confidence_threshold)
 
-            # Check if we have enough text
+        except LangDetectException:
+            # Language detection library couldn't determine language
+            return None, 0.0
+
+    @staticmethod
+    def detect_language_from_text(
+        text: str,
+        confidence_threshold: float = 0.7,
+    ) -> Tuple[Optional[str], float]:
+        """Run langdetect on already-extracted text.
+
+        Used when the caller (e.g. the PDF upload route) has already paid
+        the cost of parsing the document and wants to skip a second open.
+        """
+        try:
+            text = LanguageDetector._clean_text_for_detection(text)
             if len(text) < LanguageDetector.MIN_TEXT_LENGTH:
                 return None, 0.0
 
-            # Sample text if too long (for performance)
             if len(text) > LanguageDetector.MAX_SAMPLE_LENGTH:
-                # Take samples from beginning, middle, and end
                 chunk_size = LanguageDetector.MAX_SAMPLE_LENGTH // 3
                 text = (
                     text[:chunk_size] + ' ' +
@@ -231,28 +271,17 @@ class LanguageDetector:
                     text[-chunk_size:]
                 )
 
-            # Detect language with confidence scores
             detected_langs = detect_langs(text)
-
             if not detected_langs:
                 return None, 0.0
 
-            # Get most probable language
             best_match = detected_langs[0]
-            lang_code = best_match.lang
-            confidence = best_match.prob
-
-            # Map to full language name
-            language_name = LANGUAGE_CODE_MAP.get(lang_code)
-
-            # Return result only if confidence is high enough
-            if language_name and confidence >= confidence_threshold:
-                return language_name, confidence
-
+            language_name = LANGUAGE_CODE_MAP.get(best_match.lang)
+            if language_name and best_match.prob >= confidence_threshold:
+                return language_name, best_match.prob
             return None, 0.0
 
         except LangDetectException:
-            # Language detection library couldn't determine language
             return None, 0.0
         except Exception as e:
             # Log error but don't fail

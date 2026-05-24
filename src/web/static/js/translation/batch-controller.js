@@ -103,7 +103,7 @@ function getTranslationConfig(file) {
         tts_bitrate: ttsEnabled ? (DomHelpers.getValue('ttsBitrate') || '64k') : '64k'
     };
 
-    if (file.fileType === 'epub' || file.fileType === 'srt') {
+    if (file.fileType === 'epub' || file.fileType === 'srt' || file.fileType === 'docx' || file.fileType === 'pdf') {
         config.file_path = file.filePath;
     } else {
         if (file.content) {
@@ -266,7 +266,7 @@ export const BatchController = {
             lastTranslationPreview.innerHTML = '<div style="color: #6b7280; font-style: italic; padding: 10px;">No translation yet...</div>';
         }
 
-        if (fileToTranslate.fileType === 'epub') {
+        if (fileToTranslate.fileType === 'epub' || fileToTranslate.fileType === 'pdf') {
             DomHelpers.hide('statsGrid');
         } else {
             DomHelpers.show('statsGrid');
@@ -374,8 +374,8 @@ export const BatchController = {
         iconContainer.style.alignItems = 'center';
         iconContainer.style.fontSize = '24px';
 
-        if (file.fileType === 'epub' && file.thumbnail) {
-            // Show thumbnail
+        if ((file.fileType === 'epub' || file.fileType === 'pdf') && file.thumbnail) {
+            // Show thumbnail (EPUB cover or first-page PDF render)
             const img = document.createElement('img');
             img.src = `/api/thumbnails/${encodeURIComponent(file.thumbnail)}`;
             img.alt = 'Cover';
@@ -454,12 +454,16 @@ export const BatchController = {
 
     /**
      * Get file icon based on file type
-     * @param {string} fileType - File type ('txt', 'epub', 'srt')
+     * @param {string} fileType - File type ('txt', 'epub', 'srt', 'docx', 'pdf')
      * @returns {string} HTML string for icon
      */
     _getFileIcon(fileType) {
         if (fileType === 'epub') {
             return this._createGenericEPUBIcon();
+        } else if (fileType === 'pdf') {
+            return '📕';
+        } else if (fileType === 'docx') {
+            return '📝';
         } else if (fileType === 'srt') {
             return '🎬';
         }

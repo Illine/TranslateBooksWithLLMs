@@ -100,6 +100,14 @@ def create_translation_blueprint(state_manager, start_translation_job):
             config['text'] = data['text']
             config['file_type'] = data.get('file_type', 'txt')
 
+        # PDF translation always produces an EPUB output. Rewrite the
+        # filename eagerly so state and download endpoints lock in the
+        # right path (translate_pdf_file would otherwise write to .epub
+        # while state still pointed at .pdf).
+        if config['file_type'] == 'pdf':
+            from src.core.pdf.translator import force_epub_extension
+            config['output_filename'] = force_epub_extension(config['output_filename'])
+
         # Create translation in state manager
         state_manager.create_translation(translation_id, config)
 
