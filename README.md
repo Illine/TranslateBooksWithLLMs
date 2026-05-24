@@ -8,6 +8,8 @@
 
 </div>
 
+> **Note:** Personal fork of [hydropix/TranslateBooksWithLLMs](https://github.com/hydropix/TranslateBooksWithLLMs) (AGPL-3.0). Modified - see git log for changes.
+
 A desktop app that translates **books**, **subtitles**, and **documents** with AI - local or cloud. Drop a file, pick a language, get the result.
 
 **Formats:** EPUB, SRT, DOCX, TXT
